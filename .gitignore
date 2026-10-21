@@ -5,3 +5,6 @@ release/
 *.log
 .env
 *.tsbuildinfo
+
+# GWIRA: research snapshots - never commit reference repos
+/workflow_feature/

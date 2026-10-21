@@ -7,6 +7,7 @@ export type ReasoningEffort = 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 
 export type CodexReasoningLevel = ReasoningEffort;
 
 export type PermissionMode = 'default' | 'full-access';
+export type ConversationContext = 'business' | 'coding';
 
 export interface SessionMessage {
   id: string;
@@ -24,6 +25,7 @@ export interface CodexSession {
   reasoningEffort: ReasoningEffort;
   permissionMode: PermissionMode;
   webSearch: boolean;
+  context?: ConversationContext;
   codexConversationId?: string;
   exitCode?: number;
   error?: string;
@@ -39,6 +41,8 @@ export interface CodexThreadHistory {
   createdAt: string;
   updatedAt: string;
   filePath: string;
+  /** Read from the session file; never written back to history. */
+  model?: string;
 }
 
 export interface CodexModelInfo {
@@ -68,6 +72,7 @@ export interface StartSessionRequest {
   reasoningEffort?: ReasoningEffort;
   permissionMode?: PermissionMode;
   webSearch?: boolean;
+  context?: ConversationContext;
 }
 
 export interface SendInputRequest {
@@ -102,7 +107,7 @@ export interface CodexOutputEvent {
 export interface CodexExitEvent {
   sessionId: string;
   exitCode?: number;
-  signal?: number;
+  signal?: string;
   status: SessionStatus;
   error?: string;
   session?: CodexSession;

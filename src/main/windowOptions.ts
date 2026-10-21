@@ -7,6 +7,8 @@ export function buildMainWindowOptions(preloadPath = path.join(process.cwd(), 'd
     titleBarOverlay: { color: '#111111', symbolColor: '#d8d8d8', height: 34 }
   } : {
     titleBarStyle: 'hiddenInset',
+    // The application card begins below the native toolbar, so the divider no
+    // longer crosses this group. Use standard inset placement in that toolbar.
     trafficLightPosition: { x: 16, y: 16 }
   };
 

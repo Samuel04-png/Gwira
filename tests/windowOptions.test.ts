@@ -19,3 +19,10 @@ describe('buildMainWindowOptions', () => {
     expect(options.titleBarStyle).toBe('hidden');
     expect(options.titleBarOverlay).toEqual({ color: '#111111', symbolColor: '#d8d8d8', height: 34 });
   });
+
+  it('keeps the native macOS traffic-light group in the native toolbar', () => {
+    const options = buildMainWindowOptions('/tmp/preload.js', 'darwin');
+
+    expect(options.titleBarStyle).toBe('hiddenInset');
+    expect(options.trafficLightPosition).toEqual({ x: 16, y: 16 });
+  });

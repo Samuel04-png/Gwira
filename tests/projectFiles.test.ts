@@ -51,4 +51,21 @@ describe('listProjectFiles', () => {
 
     expect(relativePaths).toEqual(['src/renderer/main.tsx', 'README.md']);
   });
+
+  it('returns no stale results when a scan is cancelled', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'codex-project-files-'));
+    await fs.writeFile(path.join(root, 'README.md'), '');
+    const controller = new AbortController();
+    controller.abort();
+
+    await expect(listProjectFiles(root, { signal: controller.signal })).resolves.toEqual([]);
+  });
+
+  it('stops after a bounded number of inspected entries', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'codex-project-files-'));
+    await Promise.all(Array.from({ length: 10 }, (_, index) => fs.writeFile(path.join(root, `file-${index}.txt`), '')));
+
+    const files = await listProjectFiles(root, { maxEntries: 3 });
+    expect(files).toHaveLength(3);
+  });
 });

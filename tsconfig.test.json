@@ -33,8 +33,12 @@
     "src/renderer/projectFileSearch.ts",
     "src/renderer/projectThreads.ts",
     "src/renderer/projectStateStorage.ts",
+    "src/renderer/homeSessionStorage.ts",
     "src/renderer/projects.ts",
+    "src/renderer/permissionSelection.ts",
+    "src/renderer/gwira/**/*.ts",
     "src/main/processEnv.ts",
-    "src/main/codexHistory.ts"
+    "src/main/codexHistory.ts",
+    "src/main/codexExecManager.ts"
   ]
 }

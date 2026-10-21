@@ -1,7 +1,6 @@
 import type { CodexSession, CodexThreadHistory } from '../shared/types.js';
 
 export type ProjectThreadRow =
-  | { kind: 'new-thread'; projectId: string; active: boolean }
   | { kind: 'session'; projectId: string; session: CodexSession; title: string; active: boolean; running: boolean }
   | { kind: 'history'; projectId: string; history: CodexThreadHistory; active: boolean; running: boolean };
 
@@ -10,7 +9,6 @@ interface ProjectThreadRowsInput {
   activeProjectId?: string;
   activeConversationId?: string;
   activeSessionId?: string;
-  hasDraftSession: boolean;
   expandedProjectIds: ReadonlySet<string>;
   histories: CodexThreadHistory[];
   sessions?: CodexSession[];
@@ -75,11 +73,7 @@ export function getProjectThreadRows(input: ProjectThreadRowsInput): ProjectThre
       running: session.status === 'running'
     }));
 
-  return [
-    { kind: 'new-thread', projectId: input.projectId, active: isActiveProject && !input.hasDraftSession },
-    ...sessionRows,
-    ...historyRows
-  ];
+  return [...sessionRows, ...historyRows];
 }
 
 function sessionTitle(session: CodexSession): string {

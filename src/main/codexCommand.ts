@@ -1,5 +1,5 @@
 import { buildChildProcessEnv, type PackagedPathOptions } from './processEnv.js';
-import type { PermissionMode, ReasoningEffort } from '../shared/types.js';
+import type { ConversationContext, PermissionMode, ReasoningEffort } from '../shared/types.js';
 
 export const DEFAULT_CODEX_MODEL = 'gpt-5.5';
 export const DEFAULT_REASONING_EFFORT: ReasoningEffort = 'high';
@@ -14,6 +14,7 @@ export interface CodexExecSpawnRequest {
   permissionMode?: PermissionMode;
   webSearch?: boolean;
   codexConversationId?: string;
+  context?: ConversationContext;
 }
 
 export interface CodexExecSpawnOptions {
@@ -38,7 +39,7 @@ export function normalizeCodexCommand(command?: string): string {
 
 export function buildCodexExecSpawnOptions(request: CodexExecSpawnRequest, envOptions: PackagedPathOptions = {}): CodexExecSpawnOptions {
   const command = normalizeCodexCommand(request.command);
-  const model = request.model?.trim() || DEFAULT_CODEX_MODEL;
+  const model = request.model?.trim();
   const reasoningEffort = codexCliReasoningEffort(request.reasoningEffort || DEFAULT_REASONING_EFFORT);
   const permissionMode = request.permissionMode || DEFAULT_PERMISSION_MODE;
   const baseEnv = buildChildProcessEnv(envOptions);
@@ -48,13 +49,19 @@ export function buildCodexExecSpawnOptions(request: CodexExecSpawnRequest, envOp
     COLORTERM: baseEnv.COLORTERM || 'truecolor'
   };
 
-  const resumeArgs = [
+  const commonArgs = [
     '--json',
     '--skip-git-repo-check',
-    '-m',
-    model,
     '-c',
-    `model_reasoning_effort="${reasoningEffort}"`,
+    `model_reasoning_effort="${reasoningEffort}"`
+  ];
+  if (request.context === 'business') {
+    commonArgs.push('-c', `developer_instructions=${JSON.stringify(BUSINESS_ASSISTANT_INSTRUCTIONS)}`);
+  }
+  const modelArgs = model ? ['-m', model] : request.codexConversationId ? [] : ['-m', DEFAULT_CODEX_MODEL];
+  const resumeArgs = [
+    ...commonArgs,
+    ...modelArgs,
     ...resumePermissionArgs(permissionMode)
   ];
 
@@ -75,14 +82,10 @@ export function buildCodexExecSpawnOptions(request: CodexExecSpawnRequest, envOp
 
   const args = [
     'exec',
-    '--json',
+    ...commonArgs,
     '--color',
     'never',
-    '--skip-git-repo-check',
-    '-m',
-    model,
-    '-c',
-    `model_reasoning_effort="${reasoningEffort}"`,
+    ...modelArgs,
     ...permissionArgs(permissionMode),
     ...(request.webSearch ? ['--search'] : []),
     '-C',
@@ -95,6 +98,8 @@ export function buildCodexExecSpawnOptions(request: CodexExecSpawnRequest, envOp
     env
   };
 }
+
+export const BUSINESS_ASSISTANT_INSTRUCTIONS = 'You are Gwira, a business operating-system assistant. For ordinary business conversations, focus on understanding the company, asking concise clarifying questions, planning operations, proposing Doats, coordinating only authorized tasks, and explaining business activity. Do not inspect repositories, run shell commands, or use coding tools unless the user explicitly asks for a software-development task or assigns a coding Doat. Keep coding capabilities available for those explicit tasks.';
 
 export function wrapCodexCommandForPlatform(command: string, args: string[], platform: NodeJS.Platform = process.platform): Pick<CodexExecSpawnOptions, 'file' | 'args'> {
   if (platform === 'win32' && shouldRunThroughCmd(command)) {
