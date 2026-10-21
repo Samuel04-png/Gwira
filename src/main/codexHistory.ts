@@ -1,6 +1,8 @@
 import { homedir } from 'node:os';
 import path from 'node:path';
-import { readdir, readFile, rm, stat } from 'node:fs/promises';
+import { createReadStream } from 'node:fs';
+import { readdir, realpath, rm, stat } from 'node:fs/promises';
+import { createInterface } from 'node:readline';
 import { extractCodexErrorText, extractCodexProcessText } from './codexEvents.js';
 import type { CodexProjectCandidate, SessionMessage } from '../shared/types.js';
 
@@ -13,15 +15,85 @@ export interface CodexThreadHistory {
   createdAt: string;
   updatedAt: string;
   filePath: string;
+  model?: string;
 }
 
+const DEFAULT_MAX_HISTORY_FILES = 1_000;
+const DEFAULT_METADATA_BYTES = 512 * 1024;
+const DEFAULT_METADATA_CONCURRENCY = 8;
+
+export interface CodexHistoryIndexOptions {
+  sessionsRoot?: string;
+  maxFiles?: number;
+  readMetadata?: (filePath: string, updatedAt: string) => Promise<CodexThreadHistory | undefined>;
+}
+
+interface CachedHistory {
+  mtimeMs: number;
+  size: number;
+  history?: CodexThreadHistory;
+}
+
+/**
+ * A bounded, incremental metadata index for Codex session files.
+ *
+ * The Codex CLI stores sessions in date-named directories.  We visit the
+ * newest entries first, inspect at most `maxFiles` files, and cache parsed
+ * metadata by mtime and size.  Message bodies are deliberately not loaded
+ * here; they are read only when a user opens one thread.
+ */
+export class CodexHistoryIndex {
+  private readonly sessionsRoot: string;
+  private readonly maxFiles: number;
+  private readonly readMetadata: (filePath: string, updatedAt: string) => Promise<CodexThreadHistory | undefined>;
+  private readonly cache = new Map<string, CachedHistory>();
+  private listInFlight: Promise<CodexThreadHistory[]> | undefined;
+
+  constructor(options: CodexHistoryIndexOptions = {}) {
+    this.sessionsRoot = options.sessionsRoot || path.join(homedir(), '.codex', 'sessions');
+    this.maxFiles = options.maxFiles || DEFAULT_MAX_HISTORY_FILES;
+    this.readMetadata = options.readMetadata || readSessionMetadata;
+  }
+
+  async list(): Promise<CodexThreadHistory[]> {
+    if (this.listInFlight) return this.listInFlight;
+    const list = this.listUncached();
+    this.listInFlight = list;
+    try {
+      return await list;
+    } finally {
+      if (this.listInFlight === list) this.listInFlight = undefined;
+    }
+  }
+
+  private async listUncached(): Promise<CodexThreadHistory[]> {
+    const files = await findRecentJsonlFiles(this.sessionsRoot, this.maxFiles).catch(() => []);
+    const knownFiles = new Set(files);
+    for (const filePath of this.cache.keys()) {
+      if (!knownFiles.has(filePath)) this.cache.delete(filePath);
+    }
+
+    const histories = await mapWithConcurrency(files, DEFAULT_METADATA_CONCURRENCY, async (filePath) => {
+      const info = await stat(filePath).catch(() => undefined);
+      if (!info?.isFile()) return undefined;
+      const cached = this.cache.get(filePath);
+      if (cached && cached.mtimeMs === info.mtimeMs && cached.size === info.size) return cached.history;
+
+      const history = await this.readMetadata(filePath, info.mtime.toISOString()).catch(() => undefined);
+      this.cache.set(filePath, { mtimeMs: info.mtimeMs, size: info.size, history });
+      return history;
+    });
+
+    return histories
+      .filter((history): history is CodexThreadHistory => Boolean(history))
+      .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
+  }
+}
+
+const historyIndex = new CodexHistoryIndex({ sessionsRoot: process.env.CODEX_DESKTOP_SESSIONS_ROOT });
+
 export async function listCodexHistories(): Promise<CodexThreadHistory[]> {
-  const root = path.join(homedir(), '.codex', 'sessions');
-  const files = await findJsonlFiles(root).catch(() => []);
-  const histories = await Promise.all(files.map(async (file) => parseSessionHistoryLines(file, (await readFile(file, 'utf8')).split(/\r?\n/))));
-  return histories
-    .filter((history): history is CodexThreadHistory => Boolean(history))
-    .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
+  return historyIndex.list();
 }
 
 export async function listCodexProjectCandidates(): Promise<CodexProjectCandidate[]> {
@@ -59,7 +131,13 @@ export function projectCandidatesFromHistories(histories: CodexThreadHistory[]):
 
 export async function listCodexHistoriesByCwd(cwd: string): Promise<CodexThreadHistory[]> {
   const histories = await listCodexHistories();
-  return histories.filter((history) => normalizePath(history.cwd) === normalizePath(cwd));
+  const matching = await Promise.all(histories.map(async (history) => ({ history, matches: await pathsReferToSameDirectory(history.cwd, cwd) })));
+  return matching.filter((item) => item.matches).map((item) => item.history);
+}
+
+export async function pathsReferToSameDirectory(left: string, right: string): Promise<boolean> {
+  const [resolvedLeft, resolvedRight] = await Promise.all([canonicalPath(left), canonicalPath(right)]);
+  return resolvedLeft === resolvedRight;
 }
 
 export async function deleteCodexHistoryFile(filePath: string, codexHome = path.join(homedir(), '.codex')): Promise<void> {
@@ -76,13 +154,22 @@ export async function deleteCodexHistoryFile(filePath: string, codexHome = path.
 }
 
 export async function loadCodexHistoryMessages(filePath: string): Promise<SessionMessage[]> {
-  return parseSessionMessagesLines((await readFile(filePath, 'utf8')).split(/\r?\n/));
+  const messages: SessionMessage[] = [];
+  const input = createReadStream(filePath, { encoding: 'utf8' });
+  const reader = createInterface({ input, crlfDelay: Infinity });
+  for await (const line of reader) {
+    for (const message of parseSessionMessagesLines([line])) {
+      appendHistoryMessage(messages, message.role, message.text, message.createdAt);
+    }
+  }
+  return messages;
 }
 
 export function parseSessionHistoryLines(filePath: string, lines: string[]): CodexThreadHistory | undefined {
   let id: string | undefined;
   let cwd: string | undefined;
   let createdAt: string | undefined;
+  let model: string | undefined;
   let updatedAt: string | undefined;
   let title: string | undefined;
 
@@ -91,15 +178,17 @@ export function parseSessionHistoryLines(filePath: string, lines: string[]): Cod
     if (!event) continue;
     const timestamp = stringValue(event.timestamp);
     if (timestamp) updatedAt = timestamp;
+    const payload = objectValue(event.payload);
 
     if (event.type === 'session_meta') {
-      const payload = objectValue(event.payload);
       id = stringValue(payload?.id) || id;
       cwd = stringValue(payload?.cwd) || cwd;
       createdAt = stringValue(payload?.timestamp) || timestamp || createdAt;
+      model = stringValue(payload?.model) || model;
     }
 
-    const payload = objectValue(event.payload);
+    if (event.type === 'turn_context') model = stringValue(payload?.model) || model;
+
     if (!title && payload?.type === 'user_message') {
       title = cleanTitle(stringValue(payload.message));
     }
@@ -120,7 +209,8 @@ export function parseSessionHistoryLines(filePath: string, lines: string[]): Cod
     title: title || 'New thread',
     createdAt: createdAt || updatedAt || new Date(0).toISOString(),
     updatedAt: updatedAt || createdAt || new Date(0).toISOString(),
-    filePath
+    filePath,
+    ...(model ? { model } : {})
   };
 }
 
@@ -219,15 +309,49 @@ function normalizeDuplicateText(value: string): string {
   return value.replace(/\s+/g, ' ').trim();
 }
 
-async function findJsonlFiles(root: string): Promise<string[]> {
-  const entries = await readdir(root, { withFileTypes: true });
-  const nested = await Promise.all(entries.map(async (entry) => {
-    const fullPath = path.join(root, entry.name);
-    if (entry.isDirectory()) return findJsonlFiles(fullPath);
-    if (entry.isFile() && entry.name.endsWith('.jsonl')) return [fullPath];
-    return [];
-  }));
-  return nested.flat();
+async function readSessionMetadata(filePath: string, fileUpdatedAt: string): Promise<CodexThreadHistory | undefined> {
+  const lines: string[] = [];
+  const input = createReadStream(filePath, { encoding: 'utf8', end: DEFAULT_METADATA_BYTES - 1 });
+  const reader = createInterface({ input, crlfDelay: Infinity });
+  for await (const line of reader) {
+    lines.push(line);
+    const parsed = parseSessionHistoryLines(filePath, lines);
+    if (parsed?.id && parsed.cwd && parsed.title !== 'New thread') {
+      return { ...parsed, updatedAt: fileUpdatedAt };
+    }
+  }
+  const parsed = parseSessionHistoryLines(filePath, lines);
+  return parsed ? { ...parsed, updatedAt: fileUpdatedAt } : undefined;
+}
+
+async function findRecentJsonlFiles(root: string, limit: number): Promise<string[]> {
+  const files: string[] = [];
+  async function visit(directory: string): Promise<void> {
+    if (files.length >= limit) return;
+    const entries = await readdir(directory, { withFileTypes: true });
+    entries.sort((a, b) => b.name.localeCompare(a.name));
+    for (const entry of entries) {
+      if (files.length >= limit) return;
+      const fullPath = path.join(directory, entry.name);
+      if (entry.isDirectory()) await visit(fullPath);
+      else if (entry.isFile() && entry.name.endsWith('.jsonl')) files.push(fullPath);
+    }
+  }
+  await visit(root);
+  return files;
+}
+
+async function mapWithConcurrency<T, R>(items: T[], concurrency: number, map: (item: T) => Promise<R>): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let nextIndex = 0;
+  async function worker(): Promise<void> {
+    while (nextIndex < items.length) {
+      const index = nextIndex++;
+      results[index] = await map(items[index]);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, () => worker()));
+  return results;
 }
 
 function normalizePath(value: string): string {
@@ -235,6 +359,11 @@ function normalizePath(value: string): string {
     return path.win32.normalize(value);
   }
   return path.resolve(value);
+}
+
+async function canonicalPath(value: string): Promise<string> {
+  const normalized = normalizePath(value);
+  return realpath(normalized).catch(() => normalized);
 }
 
 function cleanTitle(value?: string): string | undefined {

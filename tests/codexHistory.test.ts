@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { deleteCodexHistoryFile, projectCandidatesFromHistories, parseSessionHistoryLines, parseSessionMessagesLines, relativeTimeLabel } from '../src/main/codexHistory.js';
+import { CodexHistoryIndex, deleteCodexHistoryFile, loadCodexHistoryMessages, pathsReferToSameDirectory, projectCandidatesFromHistories, parseSessionHistoryLines, parseSessionMessagesLines, relativeTimeLabel } from '../src/main/codexHistory.js';
 
 const lines = [
   JSON.stringify({ timestamp: '2026-06-21T05:25:00.066Z', type: 'session_meta', payload: { id: 'thread-1', cwd: '/tmp/project', timestamp: '2026-06-21T05:24:57.616Z' } }),
@@ -23,6 +23,15 @@ describe('parseSessionHistoryLines', () => {
     expect(history?.updatedAt).toBe('2026-06-21T05:26:00.099Z');
   });
 
+  it('reads a recorded turn model without changing the history file', () => {
+    const history = parseSessionHistoryLines('/tmp/session.jsonl', [
+      JSON.stringify({ timestamp: '2026-06-21T05:25:00.000Z', type: 'session_meta', payload: { id: 'thread-1', cwd: '/tmp/project' } }),
+      JSON.stringify({ timestamp: '2026-06-21T05:25:01.000Z', type: 'turn_context', payload: { model: 'gpt-5.5' } }),
+      JSON.stringify({ timestamp: '2026-06-21T05:25:02.000Z', type: 'event_msg', payload: { type: 'user_message', message: 'Continue' } })
+    ]);
+    expect(history?.model).toBe('gpt-5.5');
+  });
+
   it('ignores environment and AGENTS context when choosing a title', () => {
     const history = parseSessionHistoryLines('/tmp/session.jsonl', [
       JSON.stringify({ timestamp: '2026-06-21T05:25:00.000Z', type: 'session_meta', payload: { id: 'thread-1', cwd: '/tmp/project' } }),
@@ -36,6 +45,75 @@ describe('parseSessionHistoryLines', () => {
 
   it('returns undefined when metadata is missing', () => {
     expect(parseSessionHistoryLines('/tmp/session.jsonl', ['{}'])).toBeUndefined();
+  });
+});
+
+describe('CodexHistoryIndex', () => {
+  it('bounds initial metadata work and reuses cached unchanged histories', async () => {
+    const sessionsRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'codex-history-index-'));
+    const sessionDir = path.join(sessionsRoot, '2026', '10', '14');
+    await fs.mkdir(sessionDir, { recursive: true });
+    for (let index = 0; index < 12; index += 1) {
+      await fs.writeFile(path.join(sessionDir, `thread-${String(index).padStart(2, '0')}.jsonl`), lines.join('\n'));
+    }
+
+    let reads = 0;
+    const index = new CodexHistoryIndex({
+      sessionsRoot,
+      maxFiles: 5,
+      readMetadata: async (filePath, updatedAt) => {
+        reads += 1;
+        return { id: path.basename(filePath), cwd: '/tmp/project', title: 'Thread', createdAt: updatedAt, updatedAt, filePath };
+      }
+    });
+
+    expect(await index.list()).toHaveLength(5);
+    expect(reads).toBe(5);
+    expect(await index.list()).toHaveLength(5);
+    expect(reads).toBe(5);
+  });
+
+  it('refreshes only a changed file metadata entry', async () => {
+    const sessionsRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'codex-history-index-'));
+    const sessionDir = path.join(sessionsRoot, '2026', '10', '14');
+    await fs.mkdir(sessionDir, { recursive: true });
+    const first = path.join(sessionDir, 'first.jsonl');
+    const second = path.join(sessionDir, 'second.jsonl');
+    await fs.writeFile(first, lines.join('\n'));
+    await fs.writeFile(second, lines.join('\n'));
+
+    let reads = 0;
+    const index = new CodexHistoryIndex({
+      sessionsRoot,
+      readMetadata: async (filePath, updatedAt) => {
+        reads += 1;
+        return { id: path.basename(filePath), cwd: '/tmp/project', title: 'Thread', createdAt: updatedAt, updatedAt, filePath };
+      }
+    });
+    await index.list();
+    await fs.appendFile(first, '\nchanged');
+    await index.list();
+    expect(reads).toBe(3);
+  });
+
+  it('coalesces concurrent list requests into one bounded refresh', async () => {
+    const sessionsRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'codex-history-index-'));
+    const sessionDir = path.join(sessionsRoot, '2026', '10', '14');
+    await fs.mkdir(sessionDir, { recursive: true });
+    await fs.writeFile(path.join(sessionDir, 'thread.jsonl'), lines.join('\n'));
+
+    let reads = 0;
+    const index = new CodexHistoryIndex({
+      sessionsRoot,
+      readMetadata: async (filePath, updatedAt) => {
+        reads += 1;
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        return { id: path.basename(filePath), cwd: '/tmp/project', title: 'Thread', createdAt: updatedAt, updatedAt, filePath };
+      }
+    });
+
+    await Promise.all([index.list(), index.list(), index.list()]);
+    expect(reads).toBe(1);
   });
 });
 
@@ -115,10 +193,35 @@ describe('parseSessionMessagesLines', () => {
   });
 });
 
+describe('loadCodexHistoryMessages', () => {
+  it('streams a session file and preserves the visible transcript', async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'codex-history-messages-'));
+    const filePath = path.join(directory, 'thread.jsonl');
+    await fs.writeFile(filePath, lines.join('\n'));
+
+    await expect(loadCodexHistoryMessages(filePath)).resolves.toMatchObject([
+      { role: 'user', text: '今天几号？' },
+      { role: 'codex', text: '回答' }
+    ]);
+  });
+});
+
 describe('relativeTimeLabel', () => {
   it('formats recent sessions compactly', () => {
     expect(relativeTimeLabel('2026-06-21T05:20:00.000Z', new Date('2026-06-21T05:25:00.000Z'))).toBe('5m');
     expect(relativeTimeLabel('2026-06-20T05:25:00.000Z', new Date('2026-06-21T05:25:00.000Z'))).toBe('1d');
+  });
+});
+
+describe('pathsReferToSameDirectory', () => {
+  it('matches a symlinked project path with its canonical directory', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'codex-history-path-'));
+    const project = path.join(root, 'project');
+    const alias = path.join(root, 'project-alias');
+    await fs.mkdir(project);
+    await fs.symlink(project, alias);
+
+    await expect(pathsReferToSameDirectory(project, alias)).resolves.toBe(true);
   });
 });
 

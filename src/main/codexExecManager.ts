@@ -19,11 +19,33 @@ type TypedEventEmitter = EventEmitter & {
   emit<K extends keyof ExecManagerEvents>(eventName: K, ...args: ExecManagerEvents[K]): boolean;
 };
 
+export const MAX_LIVE_OUTPUT_CHARS = 4 * 1024 * 1024;
+const MAX_OUTPUT_CHUNK_CHARS = 64 * 1024;
+export const MAX_STDERR_CHARS = 64 * 1024;
+
+export interface CodexExecManagerOptions {
+  spawnProcess?: typeof spawn;
+  resolveCommand?: typeof resolveCodexCommand;
+  stopTimeoutMs?: number;
+}
+
 export class CodexExecManager {
   private readonly processes = new Map<string, ChildProcess>();
   private readonly emitter = new EventEmitter() as TypedEventEmitter;
+  private readonly stoppingSessions = new Set<string>();
+  private readonly terminalSessions = new Set<string>();
+  private readonly outputCharsBySession = new Map<string, number>();
+  private readonly truncatedOutputSessions = new Set<string>();
+  private readonly stopTimers = new Map<string, NodeJS.Timeout>();
+  private readonly spawnProcess: typeof spawn;
+  private readonly resolveCommand: typeof resolveCodexCommand;
+  private readonly stopTimeoutMs: number;
 
-  constructor(private readonly sessions: SessionStore) {}
+  constructor(private readonly sessions: SessionStore, options: CodexExecManagerOptions = {}) {
+    this.spawnProcess = options.spawnProcess || spawn;
+    this.resolveCommand = options.resolveCommand || resolveCodexCommand;
+    this.stopTimeoutMs = options.stopTimeoutMs ?? 5_000;
+  }
 
   on<K extends keyof ExecManagerEvents>(eventName: K, listener: (...args: ExecManagerEvents[K]) => void): () => void {
     this.emitter.on(eventName, listener);
@@ -32,7 +54,7 @@ export class CodexExecManager {
 
   start(request: StartSessionRequest): CodexSession {
     this.assertProjectDirectory(request.cwd);
-    return this.sessions.create(request.cwd, request.model, request.reasoningEffort, request.permissionMode, request.webSearch);
+    return this.sessions.create(request.cwd, request.model, request.reasoningEffort, request.permissionMode, request.webSearch, request.context);
   }
 
   async resume(request: ResumeSessionRequest): Promise<CodexSession> {
@@ -63,62 +85,68 @@ export class CodexExecManager {
     }
     this.sessions.updateStatus(session.id, 'running');
 
-    const spawnOptions = buildCodexExecSpawnOptions({
+    try {
+      const spawnOptions = buildCodexExecSpawnOptions({
       cwd: session.cwd,
       prompt,
-      command: await resolveCodexCommand() || 'codex',
+      command: await this.resolveCommand() || 'codex',
       model: request.model || session.model,
       reasoningEffort: request.reasoningEffort || session.reasoningEffort,
       permissionMode: request.permissionMode || session.permissionMode,
       webSearch: request.webSearch ?? session.webSearch,
-      codexConversationId: session.codexConversationId
-    });
+      codexConversationId: session.codexConversationId,
+      context: session.context
+      });
 
-    const child = spawn(spawnOptions.file, spawnOptions.args, {
+      this.terminalSessions.delete(session.id);
+      this.stoppingSessions.delete(session.id);
+      this.outputCharsBySession.set(session.id, 0);
+      this.truncatedOutputSessions.delete(session.id);
+      const child = this.spawnProcess(spawnOptions.file, spawnOptions.args, {
       cwd: spawnOptions.cwd,
       env: spawnOptions.env,
       stdio: ['ignore', 'pipe', 'pipe']
-    });
-    this.processes.set(session.id, child);
+      });
+      this.processes.set(session.id, child);
 
-    let stdoutBuffer = '';
-    let stderrBuffer = '';
+      let stdoutBuffer = '';
+      let stderrBuffer = '';
 
-    child.stdout?.on('data', (chunk: Buffer) => {
+      child.stdout?.on('data', (chunk: Buffer) => {
       stdoutBuffer = this.consumeStdout(session.id, stdoutBuffer + chunk.toString('utf8'));
-    });
+      });
 
-    child.stderr?.on('data', (chunk: Buffer) => {
+      child.stderr?.on('data', (chunk: Buffer) => {
       const text = chunk.toString('utf8');
-      stderrBuffer += text;
+      stderrBuffer = appendBoundedText(stderrBuffer, text, MAX_STDERR_CHARS);
       if (!isIgnorableStderr(text)) {
         this.emitOutput(session.id, text, true);
       }
-    });
+      });
 
-    child.on('error', (error) => {
-      this.processes.delete(session.id);
+      child.on('error', (error) => {
       const message = error instanceof Error ? error.message : String(error);
-      this.sessions.updateStatus(session.id, 'error', message);
-      this.sessions.appendMessage(session.id, 'system', `Codex failed to start: ${message}`);
-      this.emitter.emit('exit', { sessionId: session.id, status: 'error', error: message, session: this.sessions.get(session.id) });
-    });
+      this.finish(session.id, { status: 'error', error: message, systemMessage: `Codex failed to start: ${message}` });
+      });
 
-    child.on('close', (exitCode, signal) => {
-      this.processes.delete(session.id);
+      child.on('close', (exitCode, signal) => {
       stdoutBuffer = this.consumeStdout(session.id, `${stdoutBuffer}\n`);
-
-      if (exitCode === 0) {
-        const completedSession = this.sessions.markTurnComplete(session.id, exitCode ?? undefined);
-        this.emitter.emit('exit', { sessionId: session.id, exitCode: exitCode ?? undefined, signal: signal ?? undefined, status: 'idle', session: completedSession });
+      if (this.stoppingSessions.has(session.id)) {
+        this.finish(session.id, { status: 'idle', exitCode: exitCode ?? undefined, signal: signal ?? undefined });
         return;
       }
-
-      const error = stderrBuffer.trim() || `Codex exited with code ${exitCode ?? 'unknown'}`;
-      this.sessions.updateStatus(session.id, 'error', error);
-      this.sessions.appendMessage(session.id, 'system', error);
-      this.emitter.emit('exit', { sessionId: session.id, exitCode: exitCode ?? undefined, signal: signal ?? undefined, status: 'error', error, session: this.sessions.get(session.id) });
-    });
+      if (exitCode === 0) {
+        this.finish(session.id, { status: 'idle', exitCode: exitCode ?? undefined, signal: signal ?? undefined });
+      } else {
+        const error = stderrBuffer.trim() || `Codex exited with code ${exitCode ?? 'unknown'}`;
+        this.finish(session.id, { status: 'error', exitCode: exitCode ?? undefined, signal: signal ?? undefined, error, systemMessage: error });
+      }
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.finish(session.id, { status: 'error', error: message, systemMessage: `Codex failed to start: ${message}` });
+      throw error;
+    }
   }
 
   stop(request: StopSessionRequest): void {
@@ -127,10 +155,14 @@ export class CodexExecManager {
       return;
     }
 
+    if (this.stoppingSessions.has(request.sessionId)) return;
+    this.stoppingSessions.add(request.sessionId);
     child.kill('SIGTERM');
-    this.processes.delete(request.sessionId);
-    const completedSession = this.sessions.markTurnComplete(request.sessionId);
-    this.emitter.emit('exit', { sessionId: request.sessionId, status: 'idle', session: completedSession });
+    const timer = setTimeout(() => {
+      if (!this.processes.has(request.sessionId)) return;
+      child.kill('SIGKILL');
+    }, this.stopTimeoutMs);
+    this.stopTimers.set(request.sessionId, timer);
   }
 
   private consumeStdout(sessionId: string, buffer: string): string {
@@ -176,12 +208,50 @@ export class CodexExecManager {
       return;
     }
 
-    if (system) {
-      this.sessions.appendMessage(sessionId, 'system', chunk);
-    } else {
-      this.sessions.appendToLastCodexMessage(sessionId, chunk);
+    const used = this.outputCharsBySession.get(sessionId) || 0;
+    const remaining = MAX_LIVE_OUTPUT_CHARS - used;
+    if (remaining <= 0) {
+      this.emitTruncationNotice(sessionId);
+      return;
     }
-    this.emitter.emit('output', { sessionId, chunk, role: system ? 'system' : 'codex' });
+    const boundedChunk = chunk.slice(0, Math.min(remaining, MAX_OUTPUT_CHUNK_CHARS));
+    this.outputCharsBySession.set(sessionId, used + boundedChunk.length);
+
+    if (system) {
+      this.sessions.appendMessage(sessionId, 'system', boundedChunk);
+    } else {
+      this.sessions.appendToLastCodexMessage(sessionId, boundedChunk);
+    }
+    this.emitter.emit('output', { sessionId, chunk: boundedChunk, role: system ? 'system' : 'codex' });
+    if (boundedChunk.length < chunk.length) this.emitTruncationNotice(sessionId);
+  }
+
+  private emitTruncationNotice(sessionId: string): void {
+    if (this.truncatedOutputSessions.has(sessionId)) return;
+    this.truncatedOutputSessions.add(sessionId);
+    const notice = 'Live Codex output was truncated after 4 MiB to keep the application responsive. The full CLI session history remains on disk.\n';
+    this.sessions.appendMessage(sessionId, 'system', notice);
+    this.emitter.emit('output', { sessionId, chunk: notice, role: 'system' });
+  }
+
+  private finish(sessionId: string, result: { status: 'idle' | 'error'; exitCode?: number; signal?: NodeJS.Signals; error?: string; systemMessage?: string }): void {
+    if (this.terminalSessions.has(sessionId)) return;
+    this.terminalSessions.add(sessionId);
+    this.processes.delete(sessionId);
+    this.stoppingSessions.delete(sessionId);
+    const timer = this.stopTimers.get(sessionId);
+    if (timer) clearTimeout(timer);
+    this.stopTimers.delete(sessionId);
+
+    if (result.status === 'idle') {
+      const session = this.sessions.markTurnComplete(sessionId, result.exitCode);
+      this.emitter.emit('exit', { sessionId, exitCode: result.exitCode, signal: result.signal, status: 'idle', session });
+      return;
+    }
+
+    this.sessions.updateStatus(sessionId, 'error', result.error);
+    if (result.systemMessage) this.sessions.appendMessage(sessionId, 'system', result.systemMessage);
+    this.emitter.emit('exit', { sessionId, exitCode: result.exitCode, signal: result.signal, status: 'error', error: result.error, session: this.sessions.get(sessionId) });
   }
 
   private assertProjectDirectory(cwd: string): void {
@@ -193,4 +263,9 @@ export class CodexExecManager {
 
 function isIgnorableStderr(text: string): boolean {
   return text.trim() === 'Reading additional input from stdin...';
+}
+
+function appendBoundedText(current: string, next: string, limit: number): string {
+  if (current.length >= limit) return current;
+  return `${current}${next}`.slice(0, limit);
 }

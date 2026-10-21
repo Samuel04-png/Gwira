@@ -23,13 +23,13 @@ describe('buildCodexExecSpawnOptions', () => {
     expect(options.args).toEqual([
       'exec',
       '--json',
-      '--color',
-      'never',
       '--skip-git-repo-check',
-      '-m',
-      'gpt-5.5',
       '-c',
       'model_reasoning_effort="high"',
+      '--color',
+      'never',
+      '-m',
+      'gpt-5.5',
       '-s',
       'workspace-write',
       '-C',
@@ -40,7 +40,7 @@ describe('buildCodexExecSpawnOptions', () => {
     expect(options.env.TERM).toBe('xterm-256color');
   });
 
-  it('resumes a prior codex exec session when session id is known', () => {
+  it('resumes a prior session without overriding its recorded model', () => {
     const options = buildCodexExecSpawnOptions({ cwd: '/tmp/demo', prompt: '继续', codexConversationId: 'abc-123' });
 
     expect(options.args).toEqual([
@@ -48,13 +48,19 @@ describe('buildCodexExecSpawnOptions', () => {
       'resume',
       '--json',
       '--skip-git-repo-check',
-      '-m',
-      'gpt-5.5',
       '-c',
       'model_reasoning_effort="high"',
       'abc-123',
       '继续'
     ]);
+  });
+
+  it('adds the business context without removing coding tools for coding sessions', () => {
+    const business = buildCodexExecSpawnOptions({ cwd: '/tmp/demo', prompt: 'Plan payroll', context: 'business' });
+    const coding = buildCodexExecSpawnOptions({ cwd: '/tmp/demo', prompt: 'Fix the build', context: 'coding' });
+
+    expect(business.args.join(' ')).toContain('business operating-system assistant');
+    expect(coding.args.join(' ')).not.toContain('business operating-system assistant');
   });
 
   it('allows callers to override model, reasoning, permission, and web search', () => {

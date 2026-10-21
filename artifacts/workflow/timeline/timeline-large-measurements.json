@@ -1,0 +1,30 @@
+{
+  "capturedAt": "2026-10-20T07:38:40.663Z",
+  "note": "Actual measurements of the 1,600-task dev fixture. Regression limits are intentionally looser than typical values.",
+  "measurements": [
+    {
+      "size": "1280x800",
+      "domNodes": 1098,
+      "rows": 57,
+      "zoomMs": [
+        84,
+        93,
+        67
+      ],
+      "avgFrameMs": 19.1,
+      "worstFrameMs": 42
+    },
+    {
+      "size": "1440x900",
+      "domNodes": 1218,
+      "rows": 65,
+      "zoomMs": [
+        88,
+        101,
+        83
+      ],
+      "avgFrameMs": 28.6,
+      "worstFrameMs": 46
+    }
+  ]
+}

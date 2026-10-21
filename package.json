@@ -14,16 +14,27 @@
     "package:win": "npm run build && node scripts/package.mjs --platform=win",
     "typecheck": "tsc -p tsconfig.electron.json --noEmit && tsc -p tsconfig.renderer.json --noEmit && tsc -p tsconfig.test.json --noEmit",
     "test": "vitest run --config vitest.config.ts",
+    "test:electron-smoke": "npm run build && node scripts/electron-smoke.mjs",
+    "capture:workflow:f1": "node scripts/capture-workflow-f1.mjs",
+    "capture:dashboard:f2": "node scripts/capture-workflow-f1.mjs --suite=f2",
+    "capture:workspace:f3": "node scripts/capture-workflow-f1.mjs --suite=f3",
+    "capture:shell": "node scripts/capture-workflow-f1.mjs --suite=shell",
+    "capture:timeline": "node scripts/capture-workflow-f1.mjs --suite=timeline",
+    "test:electron-history": "npm run build && node scripts/electron-history-benchmark.mjs",
+    "test:electron-agent-lifecycle": "npm run build && node scripts/electron-agent-lifecycle.mjs",
     "start": "electron ."
   },
   "dependencies": {
     "@vitejs/plugin-react": "latest",
+    "@xyflow/react": "^12.12.0",
+    "dagre": "^0.8.5",
     "react": "latest",
     "react-dom": "latest",
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.1"
   },
   "devDependencies": {
+    "@types/dagre": "^0.7.54",
     "@types/node": "latest",
     "@types/react": "latest",
     "@types/react-dom": "latest",
@@ -34,5 +45,8 @@
     "vite": "latest",
     "vitest": "latest",
     "wait-on": "latest"
+  },
+  "overrides": {
+    "yauzl": "^3.3.1"
   }
 }

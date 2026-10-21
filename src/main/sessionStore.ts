@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { DEFAULT_CODEX_MODEL, DEFAULT_PERMISSION_MODE, DEFAULT_REASONING_EFFORT } from './codexCommand.js';
-import type { CodexSession, MessageRole, PermissionMode, ReasoningEffort, SessionMessage, SessionStatus } from '../shared/types.js';
+import type { CodexSession, ConversationContext, MessageRole, PermissionMode, ReasoningEffort, SessionMessage, SessionStatus } from '../shared/types.js';
 
 type NowProvider = () => string;
 type IdProvider = () => string;
@@ -21,7 +21,7 @@ export class SessionStore {
     private readonly nextId: IdProvider = defaultId
   ) {}
 
-  create(cwd: string, model = DEFAULT_CODEX_MODEL, reasoningEffort: ReasoningEffort = DEFAULT_REASONING_EFFORT, permissionMode: PermissionMode = DEFAULT_PERMISSION_MODE, webSearch = false): CodexSession {
+  create(cwd: string, model = DEFAULT_CODEX_MODEL, reasoningEffort: ReasoningEffort = DEFAULT_REASONING_EFFORT, permissionMode: PermissionMode = DEFAULT_PERMISSION_MODE, webSearch = false, context: ConversationContext = 'coding'): CodexSession {
     const timestamp = this.now();
     const session: CodexSession = {
       id: this.nextId(),
@@ -30,6 +30,7 @@ export class SessionStore {
       reasoningEffort,
       permissionMode,
       webSearch,
+      context,
       status: 'idle',
       messages: [],
       startedAt: timestamp,

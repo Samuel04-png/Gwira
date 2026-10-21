@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, shell, type IpcMainInvokeEvent, type MessageBoxOptions } from 'electron';
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs/promises';
 import os from 'node:os';
@@ -44,9 +44,23 @@ export const channels = {
 } as const;
 
 export function registerIpc(codexManager: CodexExecManager, sessions: SessionStore): void {
-  ipcMain.handle(channels.startSession, async (_event, request: StartSessionRequest) => codexManager.start(request));
-  ipcMain.handle(channels.resumeSession, async (_event, request: ResumeSessionRequest) => codexManager.resume(request));
-  ipcMain.handle(channels.sendInput, async (_event, request: SendInputRequest) => codexManager.sendInput(request));
+  const projectFileScans = new Map<number, AbortController>();
+  ipcMain.handle(channels.startSession, async (event, request: StartSessionRequest) => {
+    await confirmFullAccess(event, request.permissionMode);
+    return codexManager.start(request);
+  });
+  ipcMain.handle(channels.resumeSession, async (event, request: ResumeSessionRequest) => {
+    await confirmFullAccess(event, request.permissionMode);
+    return codexManager.resume(request);
+  });
+  ipcMain.handle(channels.sendInput, async (event, request: SendInputRequest) => {
+    // A session already authorized as Full Access does not prompt again for
+    // every turn. Escalating a workspace-write session still requires native
+    // confirmation even if a compromised renderer supplied the request.
+    const session = sessions.get(request.sessionId);
+    await confirmFullAccess(event, request.permissionMode === 'full-access' && session?.permissionMode !== 'full-access' ? 'full-access' : undefined);
+    return codexManager.sendInput(request);
+  });
   ipcMain.handle(channels.stopSession, async (_event, request: StopSessionRequest) => codexManager.stop(request));
   ipcMain.handle(channels.getSession, async (_event, sessionId: string) => sessions.get(sessionId));
   ipcMain.handle(channels.listHistories, async (_event, cwd: string) => listCodexHistoriesByCwd(cwd));
@@ -76,7 +90,17 @@ export function registerIpc(codexManager: CodexExecManager, sessions: SessionSto
     if (folder) shell.showItemInFolder(path.join(folder, 'SKILL.md'));
   });
   ipcMain.handle(channels.listHistoryProjects, async () => listCodexProjectCandidates());
-  ipcMain.handle(channels.listProjectFiles, async (_event, cwd: string) => listProjectFiles(cwd));
+  ipcMain.handle(channels.listProjectFiles, async (event, cwd: string) => {
+    const previous = projectFileScans.get(event.sender.id);
+    previous?.abort();
+    const controller = new AbortController();
+    projectFileScans.set(event.sender.id, controller);
+    try {
+      return await listProjectFiles(cwd, { signal: controller.signal });
+    } finally {
+      if (projectFileScans.get(event.sender.id) === controller) projectFileScans.delete(event.sender.id);
+    }
+  });
   ipcMain.handle(channels.listGitBranches, async (_event, cwd: string) => listGitBranches(cwd).catch(() => ({ current: '', branches: [] })));
   ipcMain.handle(channels.switchGitBranch, async (_event, request: SwitchGitBranchRequest) => switchGitBranch(request.cwd, request.branch));
   ipcMain.handle(channels.savePastedImage, async (_event, request: SavePastedImageRequest) => savePastedImage(request));
@@ -84,6 +108,10 @@ export function registerIpc(codexManager: CodexExecManager, sessions: SessionSto
   ipcMain.handle(channels.openExternalTarget, async (_event, request: OpenExternalTargetRequest) => openExternalTarget(request));
 
   ipcMain.handle(channels.selectDirectory, async () => {
+    const smokeProjectPath = process.env.ELECTRON_SMOKE_ADD_PROJECT;
+    if (process.env.ELECTRON_SMOKE_TEST === '1' && smokeProjectPath) {
+      return { canceled: false, path: smokeProjectPath };
+    }
     const result = await dialog.showOpenDialog({ properties: ['openDirectory', 'createDirectory'], title: 'Select project directory for Codex' });
     return { canceled: result.canceled, path: result.filePaths[0] };
   });
@@ -105,6 +133,23 @@ export function registerIpc(codexManager: CodexExecManager, sessions: SessionSto
   codexManager.on('exit', (payload) => {
     for (const window of BrowserWindow.getAllWindows()) window.webContents.send(channels.exit, payload);
   });
+}
+
+/** Renderer confirmation improves clarity; this native confirmation is the enforcement boundary. */
+async function confirmFullAccess(event: IpcMainInvokeEvent, permissionMode: StartSessionRequest['permissionMode']): Promise<void> {
+  if (permissionMode !== 'full-access') return;
+  const options: MessageBoxOptions = {
+    type: 'warning',
+    buttons: ['Cancel', 'Enable Full Access'],
+    defaultId: 0,
+    cancelId: 0,
+    title: 'Enable Full Access?',
+    message: 'Allow Codex full access for this action?',
+    detail: 'Full Access can modify files and run commands beyond the selected workspace.'
+  };
+  const owner = BrowserWindow.fromWebContents(event.sender);
+  const result = owner ? await dialog.showMessageBox(owner, options) : await dialog.showMessageBox(options);
+  if (result.response !== 1) throw new Error('Full Access was not confirmed');
 }
 
 async function openExternalTarget(request: OpenExternalTargetRequest): Promise<void> {

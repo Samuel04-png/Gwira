@@ -4,18 +4,19 @@ import path from 'node:path';
 export function buildMainWindowOptions(preloadPath = path.join(process.cwd(), 'dist/preload/index.js'), platform: NodeJS.Platform = process.platform): BrowserWindowConstructorOptions {
   const windowsOptions: BrowserWindowConstructorOptions = platform === 'win32' ? {
     titleBarStyle: 'hidden',
-    titleBarOverlay: { color: '#111111', symbolColor: '#d8d8d8', height: 34 }
+    titleBarOverlay: { color: '#f3f3f3', symbolColor: '#46515d', height: 38 }
   } : {
     titleBarStyle: 'hiddenInset',
-    trafficLightPosition: { x: 16, y: 16 }
+    // Centered in the 38px global top bar, which reserves space for this group.
+    trafficLightPosition: { x: 16, y: 13 }
   };
 
   return {
     width: 1280,
     height: 820,
-    minWidth: 980,
-    minHeight: 680,
-    backgroundColor: '#111111',
+    minWidth: 760,
+    minHeight: 560,
+    backgroundColor: '#f3f3f3',
     autoHideMenuBar: true,
     ...windowsOptions,
     webPreferences: {

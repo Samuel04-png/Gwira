@@ -1,26 +1,65 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import ReactMarkdown from 'react-markdown';
-import type { Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { CodexBootstrapStatus, CodexModelInfo, CodexProjectCandidate, CodexReasoningLevel, CodexSession, CodexSkillDetail, CodexSkillInfo, CodexThreadHistory, GitBranchInfo, PermissionMode, ProjectFileInfo, ReasoningEffort, SessionMessage, SessionStatus } from '../shared/types.js';
-import { diffLineClass, isMarkdownActivityText, normalizeTerminalText, splitActivitySegments } from './activitySegments.js';
 import { filterBranches } from './branchSearch.js';
 import { buildPromptWithAttachments, type ComposerAttachment, type ComposerFileReference, type ComposerSkillReference } from './composerAttachments.js';
-import { tokenizeCode } from './codeHighlight.js';
 import { composerTextareaHeight } from './composerTextarea.js';
-import { visibleTranscriptMessages } from './displayMessages.js';
 import { mergeOutputIntoMessages } from './messageMerge.js';
-import { splitUserMessageParts } from './messageParts.js';
 import { searchProjectFiles } from './projectFileSearch.js';
 import { viewAfterOpeningThread } from './navigationState.js';
-import { projectSelectorRows } from './projectSelector.js';
-import { canContinueProjectOnboarding, shouldBlockSendWithoutProject, shouldOpenProjectOnboarding } from './projectOnboarding.js';
+import { WORKSPACE_NAVIGATION_ITEMS } from './navigationTypes.js';
+import { canContinueProjectOnboarding, shouldBlockSendWithoutProject } from './projectOnboarding.js';
 import { parseStoredProjectState } from './projectStateStorage.js';
+import { clearLastActiveHomeSession, readLastActiveHomeSession, writeLastActiveHomeSession } from './homeSessionStorage.js';
+import { permissionSelection } from './permissionSelection.js';
 import { addProject, removeProject, type ProjectEntry, type ProjectState } from './projects.js';
 import { findProjectIdForSession, mergeSessionIntoProjectHistories } from './sessionHistory.js';
-import { ensureExpandedProject, getProjectThreadRows, reconcileExpandedProjects, removeExpandedProject, toggleExpandedProject } from './projectThreads.js';
+import { ensureExpandedProject, reconcileExpandedProjects, removeExpandedProject, toggleExpandedProject } from './projectThreads.js';
+import { copyText, LocalImagePreview, Transcript } from './components/Transcript.js';
+import { ProjectSidebar, type WorkspaceNavigation } from './components/ProjectSidebar.js';
+import { SkillsView } from './components/SkillsView.js';
+import { WorkspaceShell } from './components/WorkspaceShell.js';
+import type { WorkspaceTabChoice } from './components/GlobalTopBar.js';
+import { GlobalTopBar } from './components/GlobalTopBar.js';
+import { inboxCounts } from './gwira/inbox/inboxViewModel.js';
+import { closeWorkspaceTab, createDefaultWorkspaceTabs, destinationView, openWorkspaceTab, reorderWorkspaceTab, restoreWorkspaceTabs, workspaceTabLabel, workspaceTabsStorageKey, type WorkspaceDestination, type WorkspaceTab, type WorkspaceTabsState } from './workspaceTabs.js';
+import { InlineSelect } from './components/InlineSelect.js';
+import { ProjectSelectorPopover, Welcome } from './components/ProjectControls.js';
+import { MyWorkPage, type NewTaskInput, type TaskUpdateInput } from './gwira/work/MyWorkPage.js';
+import type { Agent, Assignee, GwiraLocalState, Person, TaskStatus } from './gwira/domain/types.js';
+import { reduceGwira, type GwiraCommand } from './gwira/domain/reducer.js';
+import { createInitialLocalState, GWIRA_LOCAL_STORAGE_RECOVERY_KEY, loadGwiraLocalState, saveGwiraLocalState } from './gwira/data/localStore.js';
+import { associateCodingTaskSession, createCodingTaskSendInputRequest, createCodingTaskStartRequest, mapCodexExitToAgentRun, validateCodingTaskLaunch, validateCodingTaskStop } from './gwira/agents/codingTaskBridge.js';
+import { HomePage } from './gwira/home/HomePage.js';
+import { DashboardSidebar } from './gwira/dashboard/DashboardSidebar.js';
+import { DashboardPage } from './gwira/dashboard/DashboardPage.js';
+import { DevNodeGallery } from './gwira/graph/DevNodeGallery.js';
+import { InboxPage } from './gwira/inbox/InboxPage.js';
+import { TeamsPage, type NewPersonInput } from './gwira/workspace/TeamsPage.js';
+import { AgentsPage, type NewCodingAgentInput } from './gwira/workspace/AgentsPage.js';
+import { SettingsPage } from './gwira/workspace/SettingsPage.js';
+import { recoverInterruptedAgentRuns } from './gwira/domain/recovery.js';
+import { DoatDirectory } from './gwira/doats/ui/DoatDirectory.js';
+import { DoatCreationWizard } from './gwira/doats/ui/DoatCreationWizard.js';
+import { DoatProfile } from './gwira/doats/ui/DoatProfile.js';
+import type { DoatDraft } from './gwira/doats/ui/types.js';
+import type { Doat } from './gwira/doats/domain/types.js';
+import { createProceduralVisualRevision, DOAT_PALETTES } from './gwira/doats/visual/avatar.js';
+import { doatToUiRecord } from './gwira/doats/doatViewModel.js';
+import { planDoatExecution } from './gwira/doats/execution/executionPlanner.js';
+import { OrganizationPage } from './gwira/organization/ui/OrganizationPage.js';
+import type { OrganizationStructure } from './gwira/organization/domain/organizationTypes.js';
+import { OnboardingPage } from './gwira/onboarding/OnboardingPage.js';
+import { nextOnboardingState, previousOnboardingState, type LocalOnboardingState } from './gwira/onboarding/onboardingModel.js';
+import { IntegrationsCatalogPage } from './gwira/integrations/ui/IntegrationsCatalogPage.js';
+import { INTEGRATION_CATALOG } from './gwira/integrations/domain/catalog.js';
+import { LibraryPage } from './gwira/library/LibraryPage.js';
 import './styles.css';
+import './shell.css';
+
+document.documentElement.dataset.platform = /Windows/i.test(navigator.userAgent) ? 'win32' : /Mac/i.test(navigator.userAgent) ? 'darwin' : 'linux';
 
 const defaultModel = 'gpt-5.5';
 const projectsStorageKey = 'codex-desktop.projects.v1';
@@ -38,8 +77,8 @@ const fallbackModels: CodexModelInfo[] = [{ slug: defaultModel, defaultReasoning
 const emptyGitBranches: GitBranchInfo = { current: '', branches: [] };
 
 const permissionOptions: Array<{ value: PermissionMode; label: string }> = [
-  { value: 'default', label: 'Default permissions' },
-  { value: 'full-access', label: 'Full access' }
+  { value: 'default', label: 'Workspace write (recommended)' },
+  { value: 'full-access', label: 'Full access (use with care)' }
 ];
 
 function statusLabel(status: SessionStatus): string {
@@ -102,6 +141,37 @@ function normalizeProjectPath(value: string): string {
   return value.replace(/[\\/]+$/, '');
 }
 
+function gwiraId(): string {
+  return crypto.randomUUID();
+}
+
+function createGwiraState(): GwiraLocalState {
+  const now = new Date().toISOString();
+  return createInitialLocalState(gwiraId(), gwiraId(), now);
+}
+
+function loadWorkspaceTabs(state: GwiraLocalState, projects: ProjectState): WorkspaceTabsState {
+  try {
+    return restoreWorkspaceTabs(localStorage.getItem(workspaceTabsStorageKey), (destination) =>
+      destination.type === 'task'
+        ? state.tasks.some((task) => task.id === destination.taskId)
+        : destination.type === 'doat'
+          ? state.doats.some((doat) => doat.id === destination.doatId && !doat.archivedAt)
+          : destination.type === 'project'
+            ? projects.projects.some((project) => project.id === destination.projectId)
+          : destination.type === 'conversation'
+            ? projects.projects.some((project) => project.id === destination.projectId)
+          : true
+    );
+  } catch {
+    return createDefaultWorkspaceTabs();
+  }
+}
+
+function loadInitialGwiraState(): GwiraLocalState {
+  return recoverInterruptedAgentRuns(loadGwiraLocalState(localStorage, createGwiraState), new Date().toISOString(), gwiraId);
+}
+
 function App(): React.ReactElement {
   const [projectState, setProjectState] = useState<ProjectState>(() => loadProjectState());
   const [session, setSession] = useState<CodexSession | undefined>();
@@ -112,7 +182,23 @@ function App(): React.ReactElement {
   const [selectedSkills, setSelectedSkills] = useState<ComposerSkillReference[]>([]);
   const [selectedFiles, setSelectedFiles] = useState<ComposerFileReference[]>([]);
   const [availableSkills, setAvailableSkills] = useState<CodexSkillInfo[]>([]);
-  const [activeView, setActiveView] = useState<'chat' | 'skills'>('chat');
+  const [activeView, setActiveView] = useState<WorkspaceNavigation>('home');
+  const navigationHistoryRef = useRef<WorkspaceNavigation[]>(['home']);
+  const navigationIndexRef = useRef(0);
+  const [, setNavigationVersion] = useState(0);
+  const [doatScreen, setDoatScreen] = useState<'directory' | 'create' | 'profile'>('directory');
+  const [selectedDoatId, setSelectedDoatId] = useState<string | undefined>();
+  const [requestedBusinessTaskId, setRequestedBusinessTaskId] = useState<string | undefined>();
+  const [gwiraState, setGwiraState] = useState<GwiraLocalState>(loadInitialGwiraState);
+  const [workspaceTabs, setWorkspaceTabs] = useState<WorkspaceTabsState>(() => loadWorkspaceTabs(gwiraState, projectState));
+  const [dashboardInspectorOpen, setDashboardInspectorOpen] = useState(() => {
+    try { return localStorage.getItem('gwira.dashboard.context-panel-open') !== 'false'; } catch { return true; }
+  });
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    try { return localStorage.getItem('gwira.sidebar.collapsed') === 'true'; } catch { return false; }
+  });
+  const [narrowWindow, setNarrowWindow] = useState(() => window.matchMedia('(max-width: 899px)').matches);
+  const [narrowSidebarOpen, setNarrowSidebarOpen] = useState(false);
   const [skillSearch, setSkillSearch] = useState('');
   const [selectedSkillDetail, setSelectedSkillDetail] = useState<CodexSkillDetail | undefined>();
   const [skillsLoading, setSkillsLoading] = useState(false);
@@ -129,21 +215,24 @@ function App(): React.ReactElement {
   const [error, setError] = useState<string | undefined>();
   const [model, setModel] = useState(defaultModel);
   const [availableModels, setAvailableModels] = useState<CodexModelInfo[]>(fallbackModels);
+  const [modelsLoaded, setModelsLoaded] = useState(false);
   const [reasoningEffort, setReasoningEffort] = useState<ReasoningEffort>('high');
-  const [permissionMode, setPermissionMode] = useState<PermissionMode>('full-access');
+  const [permissionMode, setPermissionMode] = useState<PermissionMode>('default');
+  const [fullAccessConfirmationOpen, setFullAccessConfirmationOpen] = useState(false);
   const [bootstrapStatus, setBootstrapStatus] = useState<CodexBootstrapStatus | undefined>();
   const [bootstrapHelpOpen, setBootstrapHelpOpen] = useState(false);
   const [projectOnboardingOpen, setProjectOnboardingOpen] = useState(false);
-  const [projectOnboardingDismissed, setProjectOnboardingDismissed] = useState(false);
   const [historyProjectCandidates, setHistoryProjectCandidates] = useState<CodexProjectCandidate[]>([]);
   const [selectedOnboardingProjectIds, setSelectedOnboardingProjectIds] = useState<Set<string>>(() => new Set());
   const [expandedProjectIds, setExpandedProjectIds] = useState<Set<string>>(() => new Set(projectState.activeProjectId ? [projectState.activeProjectId] : []));
   const [historiesByProject, setHistoriesByProject] = useState<Record<string, CodexThreadHistory[]>>({});
+  const homeRestoreAttemptedRef = useRef(false);
   const transcriptRef = useRef<HTMLDivElement | null>(null);
   const composerTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const workspaceRef = useRef<HTMLElement | null>(null);
   const branchControlRef = useRef<HTMLDivElement | null>(null);
   const projectMenuRef = useRef<HTMLDivElement | null>(null);
+  const projectMenuTriggerRef = useRef<HTMLButtonElement | null>(null);
   const inlineMenuRef = useRef<HTMLDivElement | null>(null);
   const resizeComposerFrameRef = useRef<number | undefined>(undefined);
   const [openProjectMenuId, setOpenProjectMenuId] = useState<string | undefined>();
@@ -153,6 +242,15 @@ function App(): React.ReactElement {
   const sessionsByIdRef = useRef<Record<string, CodexSession>>({});
   const activeSessionIdRef = useRef<string | undefined>(activeSessionId);
   const recentSessionsRef = useRef<Record<string, CodexSession>>({});
+  const gwiraStateRef = useRef(gwiraState);
+  const workspaceTabsRef = useRef(workspaceTabs);
+  const codingTaskLaunchesRef = useRef(new Set<string>());
+  const dashboardHandoffRef = useRef(false);
+  const intentionallyStoppedTaskSessionsRef = useRef(new Set<string>());
+  const [startingCodingTaskIds, setStartingCodingTaskIds] = useState<Set<string>>(() => new Set());
+  const [stoppingCodingTaskIds, setStoppingCodingTaskIds] = useState<Set<string>>(() => new Set());
+
+  workspaceTabsRef.current = workspaceTabs;
 
   const activeProject = useMemo(() => projectState.projects.find((project) => project.id === projectState.activeProjectId) ?? projectState.projects[0], [projectState]);
   const openProjectMenu = useMemo(() => projectState.projects.find((project) => project.id === openProjectMenuId), [openProjectMenuId, projectState.projects]);
@@ -161,16 +259,212 @@ function App(): React.ReactElement {
   const commandItems = useMemo(() => commandMenu === 'skills'
     ? enabledSkills.filter((skill) => commandMatches(`${skill.name} ${skill.description ?? ''} ${skill.id}`, commandQuery)).slice(0, 12)
     : searchProjectFiles(availableFiles, commandQuery, 18), [availableFiles, commandMenu, commandQuery, enabledSkills]);
+  // The conversation's own recorded model, when the configured provider no longer offers it. Never replaced automatically.
+  const unavailableModel = modelsLoaded && session?.model && !availableModels.some((option) => option.slug === session.model) ? session.model : undefined;
   const selectedModelInfo = useMemo(() => availableModels.find((option) => option.slug === model), [availableModels, model]);
   const supportedReasoningOptions = useMemo(() => supportedReasoningForModel(selectedModelInfo), [selectedModelInfo]);
   const activeStatus = session?.status ?? 'idle';
   const canSend = activeStatus !== 'running' && (input.trim().length > 0 || attachments.length > 0 || selectedSkills.length > 0 || selectedFiles.length > 0);
   const currentTitle = session?.messages.find((message) => message.role === 'user')?.text.slice(0, 18) || 'New thread';
+  const hasConversationBreadcrumb = Boolean(session?.codexConversationId && session.messages.some((message) => message.role === 'user'));
+  const doatRecords = useMemo(() => gwiraState.doats.map((entry) => doatToUiRecord(entry as Doat, gwiraState)), [gwiraState]);
+  const selectedDoat = selectedDoatId ? doatRecords.find((entry) => entry.id === selectedDoatId) : undefined;
+  const canGoBack = navigationIndexRef.current > 0;
+  const canGoForward = navigationIndexRef.current < navigationHistoryRef.current.length - 1;
+
+  function persistWorkspaceTabs(next: WorkspaceTabsState): void {
+    workspaceTabsRef.current = next;
+    setWorkspaceTabs(next);
+  }
+
+  function activateWorkspaceTab(tab: WorkspaceTab): void {
+    persistWorkspaceTabs({ ...workspaceTabsRef.current, activeTabId: tab.id });
+    const destination = tab.destination;
+    if (destination.type === 'task') {
+      setRequestedBusinessTaskId(destination.taskId);
+      setActiveView('my-work');
+    } else if (destination.type === 'doat') {
+      const doat = gwiraStateRef.current.doats.find((entry) => entry.id === destination.doatId && !entry.archivedAt);
+      if (!doat) {
+        setError('This Doat is no longer available in the current workspace.');
+        return;
+      }
+      setSelectedDoatId(doat.id);
+      setDoatScreen('profile');
+      setActiveView('doats');
+    } else if (destination.type === 'project') {
+      const project = projectStateRef.current.projects.find((entry) => entry.id === destination.projectId);
+      if (project) selectProject(project);
+      else setError('This project is no longer available.');
+    } else if (destination.type === 'conversation') {
+      const project = projectStateRef.current.projects.find((entry) => entry.id === destination.projectId);
+      const history = historiesByProject[destination.projectId]?.find((entry) => entry.id === destination.conversationId);
+      if (!project) {
+        setError('The project for this conversation is no longer available.');
+      } else if (history) {
+        void openHistory(project, history);
+      } else {
+        setActiveView('home');
+        void loadConversationTab(project, destination.conversationId);
+      }
+    } else {
+      const view = destination.view;
+      setActiveView(view);
+      if (view === 'doats') {
+        setDoatScreen('directory');
+        setSelectedDoatId(undefined);
+      }
+      if (view === 'home') openHome();
+    }
+  }
+
+  function openWorkspaceDestination(destination: WorkspaceDestination): void {
+    const next = openWorkspaceTab(workspaceTabsRef.current, destination);
+    persistWorkspaceTabs(next);
+    const active = next.tabs.find((tab) => tab.id === next.activeTabId);
+    if (active) activateWorkspaceTab(active);
+  }
+
+  function openWorkspaceView(view: WorkspaceNavigation): void {
+    openWorkspaceDestination({ type: 'view', view: view === 'chat' ? 'home' : view });
+  }
+
+  function showHomeTabWithoutRestore(): void {
+    const next = openWorkspaceTab(workspaceTabsRef.current, { type: 'view', view: 'home' });
+    persistWorkspaceTabs(next);
+    setActiveView('home');
+  }
+
+  function closeWorkspaceDestination(tab: WorkspaceTab): void {
+    const current = workspaceTabsRef.current;
+    const next = closeWorkspaceTab(current, tab.id);
+    persistWorkspaceTabs(next);
+    if (current.activeTabId === tab.id) {
+      const active = next.tabs.find((item) => item.id === next.activeTabId);
+      if (active) activateWorkspaceTab(active);
+    }
+  }
+
+  function switchWorkspaceTab(direction: -1 | 1): void {
+    const current = workspaceTabsRef.current;
+    const index = current.tabs.findIndex((tab) => tab.id === current.activeTabId);
+    if (index < 0 || current.tabs.length < 2) return;
+    activateWorkspaceTab(current.tabs[(index + direction + current.tabs.length) % current.tabs.length]!);
+  }
+
+  function labelForWorkspaceTab(tab: WorkspaceTab): string {
+    const destination = tab.destination;
+    if (destination.type === 'task') return gwiraState.tasks.find((task) => task.id === destination.taskId)?.title ?? 'Unavailable task';
+    if (destination.type === 'doat') return gwiraState.doats.find((doat) => doat.id === destination.doatId)?.identity.name ?? 'Unavailable Doat';
+    if (destination.type === 'project') return projectState.projects.find((project) => project.id === destination.projectId)?.name ?? 'Unavailable project';
+    return workspaceTabLabel(destination, (item) => item.type === 'conversation'
+      ? historiesByProject[item.projectId]?.find((history) => history.id === item.conversationId)?.title
+      : undefined);
+  }
+
+  const workspaceTabChoices = useMemo<WorkspaceTabChoice[]>(() => {
+    return [
+      ...WORKSPACE_NAVIGATION_ITEMS.map(({ view, label }) => ({ destination: { type: 'view' as const, view }, label })),
+      ...gwiraState.tasks.map((task) => ({ destination: { type: 'task' as const, taskId: task.id }, label: task.title, detail: 'Task · My Work' })),
+      ...gwiraState.doats.filter((doat) => !doat.archivedAt).map((doat) => ({ destination: { type: 'doat' as const, doatId: doat.id }, label: doat.identity.name, detail: 'Doat profile' })),
+      ...projectState.projects.map((project) => ({ destination: { type: 'project' as const, projectId: project.id }, label: project.name, detail: 'Project · Home' })),
+      ...Object.entries(historiesByProject).flatMap(([projectId, histories]) => {
+        const project = projectState.projects.find((entry) => entry.id === projectId);
+        return project ? histories.map((history) => ({
+          destination: { type: 'conversation' as const, projectId, conversationId: history.id },
+          label: history.title || 'Untitled conversation',
+          detail: `Conversation · ${project.name}`
+        })) : [];
+      })
+    ];
+  }, [gwiraState.doats, gwiraState.tasks, historiesByProject, projectState.projects]);
+
+  useEffect(() => {
+    try { localStorage.setItem(workspaceTabsStorageKey, JSON.stringify(workspaceTabs)); } catch (errorValue) {
+      setError(errorValue instanceof Error ? `Could not save open tabs: ${errorValue.message}` : 'Could not save open tabs.');
+    }
+  }, [workspaceTabs]);
+
+  useEffect(() => {
+    try { localStorage.setItem('gwira.dashboard.context-panel-open', String(dashboardInspectorOpen)); } catch (errorValue) {
+      setError(errorValue instanceof Error ? `Could not save inspector preference: ${errorValue.message}` : 'Could not save inspector preference.');
+    }
+  }, [dashboardInspectorOpen]);
+
+  useEffect(() => {
+    try { localStorage.setItem('gwira.sidebar.collapsed', String(sidebarCollapsed)); } catch { /* preference only */ }
+  }, [sidebarCollapsed]);
+
+  useEffect(() => {
+    const query = window.matchMedia('(max-width: 899px)');
+    const onChange = (event: MediaQueryListEvent): void => { setNarrowWindow(event.matches); if (!event.matches) setNarrowSidebarOpen(false); };
+    query.addEventListener('change', onChange);
+    return () => query.removeEventListener('change', onChange);
+  }, []);
+
+  useEffect(() => { setNarrowSidebarOpen(false); }, [activeView]);
+
+  const effectiveSidebarCollapsed = narrowWindow ? !narrowSidebarOpen : sidebarCollapsed;
+  function toggleSidebar(): void {
+    if (narrowWindow) setNarrowSidebarOpen((open) => !open);
+    else setSidebarCollapsed((value) => !value);
+  }
+
+  useEffect(() => {
+    const active = workspaceTabs.tabs.find((tab) => tab.id === workspaceTabs.activeTabId);
+    if (active) activateWorkspaceTab(active);
+    // Restored navigation is applied once; tab changes are activated directly by interaction handlers.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const history = navigationHistoryRef.current;
+    const index = navigationIndexRef.current;
+    if (history[index] === activeView) return;
+    navigationHistoryRef.current = [...history.slice(0, index + 1), activeView];
+    navigationIndexRef.current = navigationHistoryRef.current.length - 1;
+    setNavigationVersion((version) => version + 1);
+  }, [activeView]);
+
+  function goBack(): void {
+    if (navigationIndexRef.current === 0) return;
+    navigationIndexRef.current -= 1;
+    setNavigationVersion((version) => version + 1);
+    openWorkspaceView(navigationHistoryRef.current[navigationIndexRef.current] ?? 'home');
+  }
+
+  function goForward(): void {
+    if (navigationIndexRef.current >= navigationHistoryRef.current.length - 1) return;
+    navigationIndexRef.current += 1;
+    setNavigationVersion((version) => version + 1);
+    openWorkspaceView(navigationHistoryRef.current[navigationIndexRef.current] ?? 'home');
+  }
 
   useEffect(() => {
     projectStateRef.current = projectState;
     localStorage.setItem(projectsStorageKey, JSON.stringify(projectState));
   }, [projectState]);
+
+  useEffect(() => {
+    gwiraStateRef.current = gwiraState;
+    try {
+      saveGwiraLocalState(localStorage, gwiraState);
+    } catch (value) {
+      // A quota/privacy failure must not take down the renderer or imply the
+      // operation was persisted. State remains available for this session.
+      setError(`Gwira workspace could not be saved locally: ${value instanceof Error ? value.message : String(value)}`);
+    }
+  }, [gwiraState]);
+
+  useEffect(() => {
+    try {
+      if (localStorage.getItem(GWIRA_LOCAL_STORAGE_RECOVERY_KEY)) {
+        setError('Gwira found malformed local workspace data and preserved a recovery copy before starting a new local workspace.');
+      }
+    } catch {
+      setError('Gwira local workspace storage is unavailable. Changes will not persist after restart.');
+    }
+  }, []);
 
   useEffect(() => {
     sessionRef.current = session;
@@ -184,6 +478,7 @@ function App(): React.ReactElement {
     void window.codexDesktop.listModels().then((models) => {
       const nextModels = models.length > 0 ? models : fallbackModels;
       setAvailableModels(nextModels);
+      setModelsLoaded(true);
       setModel((current) => nextModels.some((option) => option.slug === current) ? current : nextModels[0].slug);
     });
   }, []);
@@ -209,22 +504,23 @@ function App(): React.ReactElement {
 
   useEffect(() => {
     if (!activeProject) return;
-    void window.codexDesktop.listProjectFiles(activeProject.path).then(setAvailableFiles);
+    let cancelled = false;
+    void window.codexDesktop.listProjectFiles(activeProject.path)
+      .then((files) => {
+        if (!cancelled) setAvailableFiles(files);
+      })
+      .catch((errorValue) => {
+        if (!cancelled) setError(errorValue instanceof Error ? errorValue.message : 'Failed to load project files');
+      });
     setBranchMenuOpen(false);
     setProjectSelectorOpen(false);
     setProjectSelectorPosition(undefined);
+    return () => { cancelled = true; };
   }, [activeProject?.id, activeProject?.path]);
 
   useEffect(() => {
-    if (projectState.projects.length > 0) {
-      setProjectOnboardingOpen(false);
-      setProjectOnboardingDismissed(false);
-      return;
-    }
-    if (!projectOnboardingDismissed && shouldOpenProjectOnboarding(projectState.projects.length, projectOnboardingOpen)) {
-      setProjectOnboardingOpen(true);
-    }
-  }, [projectOnboardingDismissed, projectOnboardingOpen, projectState.projects.length]);
+    if (projectState.projects.length > 0 && projectOnboardingOpen) setProjectOnboardingOpen(false);
+  }, [projectOnboardingOpen, projectState.projects.length]);
 
   useEffect(() => {
     const projectKeys = new Set(projectState.projects.map((project) => project.id));
@@ -276,6 +572,19 @@ function App(): React.ReactElement {
   }, [openProjectMenuId]);
 
   useEffect(() => {
+    if (!openProjectMenuId) return;
+    function closeProjectMenuOnEscape(event: KeyboardEvent): void {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      setOpenProjectMenuId(undefined);
+      setProjectMenuPosition(undefined);
+      projectMenuTriggerRef.current?.focus();
+    }
+    document.addEventListener('keydown', closeProjectMenuOnEscape);
+    return () => document.removeEventListener('keydown', closeProjectMenuOnEscape);
+  }, [openProjectMenuId]);
+
+  useEffect(() => {
     if (supportedReasoningOptions.includes(reasoningEffort)) return;
     setReasoningEffort(normalizeReasoningLevel(selectedModelInfo?.defaultReasoningLevel ?? supportedReasoningOptions[0] ?? 'high'));
   }, [reasoningEffort, selectedModelInfo?.defaultReasoningLevel, supportedReasoningOptions]);
@@ -287,6 +596,15 @@ function App(): React.ReactElement {
   useEffect(() => {
     refreshAllProjectHistories();
   }, [projectState.projects]);
+
+  // Restore only the explicitly remembered conversation. This avoids a broad
+  // history scan and, because resume only reads persisted messages, never
+  // restarts a stopped execution or reruns an instruction.
+  useEffect(() => {
+    if (homeRestoreAttemptedRef.current) return;
+    homeRestoreAttemptedRef.current = true;
+    void restoreLastActiveHomeSession();
+  }, []);
 
   useEffect(() => {
     const removeOutput = window.codexDesktop.onOutput((event) => {
@@ -317,6 +635,7 @@ function App(): React.ReactElement {
       cacheSession(completedSession);
       if (completedSession.codexConversationId) recentSessionsRef.current[completedSession.codexConversationId] = completedSession;
       mergeCompletedSessionHistory(completedSession);
+      updateCodingTaskAfterExit(event, updatedAt);
       void refreshProjectHistories(completedSession.cwd);
     });
 
@@ -355,6 +674,244 @@ function App(): React.ReactElement {
     if (activeSessionIdRef.current === nextSession.id) {
       sessionRef.current = nextSession;
       setSession(nextSession);
+      const project = projectStateRef.current.projects.find((item) => normalizeProjectPath(item.path) === normalizeProjectPath(nextSession.cwd));
+      if (project && nextSession.codexConversationId) rememberHomeSession(project, nextSession.codexConversationId, nextSession.updatedAt);
+    }
+  }
+
+  function dispatchGwira(command: GwiraCommand): void {
+    setGwiraState((current) => reduceGwira(current, command));
+  }
+
+  function currentPerson(): Assignee | undefined {
+    const person = gwiraStateRef.current.people[0];
+    return person ? { kind: 'person', id: person.id } : undefined;
+  }
+
+  function updateCodingTaskAfterExit(event: Parameters<typeof mapCodexExitToAgentRun>[1], at: string): void {
+    const knownTask = gwiraStateRef.current.tasks.find((item) => item.agentRun?.sessionId === event.sessionId);
+    if (knownTask) {
+      codingTaskLaunchesRef.current.delete(knownTask.id);
+      setStartingCodingTaskIds((ids) => { const next = new Set(ids); next.delete(knownTask.id); return next; });
+      setStoppingCodingTaskIds((ids) => {
+        if (!ids.has(knownTask.id)) return ids;
+        const next = new Set(ids); next.delete(knownTask.id); return next;
+      });
+    }
+    const wasStopped = intentionallyStoppedTaskSessionsRef.current.delete(event.sessionId);
+    setGwiraState((current) => {
+      const task = current.tasks.find((item) => item.agentRun?.sessionId === event.sessionId);
+      if (!task) return current;
+      const agentRun = mapCodexExitToAgentRun(task.agentRun, event, at, wasStopped);
+      if (!agentRun) return current;
+      let next = reduceGwira(current, { type: 'SET_AGENT_RUN', taskId: task.id, agentRun, at, activityId: gwiraId() });
+      if (agentRun.status === 'completed' && task.status === 'in_progress') {
+        next = reduceGwira(next, { type: 'TRANSITION_TASK', taskId: task.id, status: 'in_review', at, activityId: gwiraId(), actor: task.assignee });
+        const resultId = agentRun.codexConversationId ?? agentRun.sessionId;
+        next = reduceGwira(next, { type: 'REQUEST_APPROVAL', approval: { id: gwiraId(), taskId: task.id, resultId, requestedBy: task.assignee!, status: 'pending', createdAt: at }, activityId: gwiraId() });
+      } else if (agentRun.status === 'stopped' && task.status === 'in_progress') {
+        next = reduceGwira(next, { type: 'TRANSITION_TASK', taskId: task.id, status: 'todo', at, activityId: gwiraId(), actor: task.assignee });
+      } else if (agentRun.status === 'error' && task.status === 'in_progress') {
+        next = reduceGwira(next, { type: 'TRANSITION_TASK', taskId: task.id, status: 'blocked', at, activityId: gwiraId(), actor: task.assignee });
+      }
+      return next;
+    });
+  }
+
+  function createTask(input: NewTaskInput): string {
+    const now = new Date().toISOString();
+    const id = gwiraId();
+    dispatchGwira({ type: 'CREATE_TASK', task: { id, workspaceId: gwiraStateRef.current.workspace.id, title: input.title, description: input.description, projectId: input.projectId, priority: input.priority, dueDate: input.dueDate, assignee: input.assignee, status: 'todo', createdAt: now, updatedAt: now }, activityId: gwiraId() });
+    return id;
+  }
+
+  function updateTask(taskId: string, input: TaskUpdateInput): void {
+    dispatchGwira({ type: 'UPDATE_TASK', taskId, ...input, at: new Date().toISOString(), activityId: gwiraId() });
+  }
+
+  function transitionTask(taskId: string, status: TaskStatus): void {
+    dispatchGwira({ type: 'TRANSITION_TASK', taskId, status, at: new Date().toISOString(), activityId: gwiraId(), actor: currentPerson() });
+  }
+
+  function addTaskComment(taskId: string, body: string): void {
+    const author = currentPerson();
+    if (!author) { setError('Add a team member before posting task comments.'); return; }
+    const now = new Date().toISOString();
+    dispatchGwira({ type: 'ADD_COMMENT', comment: { id: gwiraId(), taskId, author, body, createdAt: now }, activityId: gwiraId() });
+  }
+
+  function decideApproval(approvalId: string, status: 'approved' | 'changes_requested'): void {
+    const actor = currentPerson();
+    if (!actor) { setError('Add a team member before reviewing an approval.'); return; }
+    dispatchGwira({ type: 'DECIDE_APPROVAL', approvalId, status, actor, at: new Date().toISOString(), activityId: gwiraId() });
+  }
+
+  function addPerson(input: NewPersonInput): void {
+    const person: Person = { id: gwiraId(), workspaceId: gwiraStateRef.current.workspace.id, name: input.name, role: input.role, createdAt: new Date().toISOString() };
+    dispatchGwira({ type: 'ADD_PERSON', person });
+  }
+
+  function addCodingAgent(input: NewCodingAgentInput): void {
+    const agent: Agent = { id: gwiraId(), workspaceId: gwiraStateRef.current.workspace.id, name: input.name, type: 'coding', createdAt: new Date().toISOString() };
+    dispatchGwira({ type: 'ADD_AGENT', agent });
+  }
+
+  function createDoat(draft: DoatDraft): void {
+    const now = new Date().toISOString();
+    const id = gwiraId();
+    const providerAvailable = bootstrapStatus?.installed === true;
+    const palette = DOAT_PALETTES.find((item) => item.primary.toLowerCase() === draft.avatar.primaryColor.toLowerCase()) ?? DOAT_PALETTES[0];
+    const shape = ({ orb: 'orb', prism: 'prism', leaf: 'capsule', satellite: 'halo', arch: 'facet' } as const)[draft.avatar.shape];
+    const visual = createProceduralVisualRevision({ doatId: id, name: draft.name, role: draft.role, personality: draft.personality, capabilityIds: providerAvailable ? ['codex-cli'] : [], generationKey: `initial:${draft.avatar.seed}`, shapePreference: shape, paletteId: palette.id, accessory: draft.avatar.accessory === 'halo' ? 'orbit' : draft.avatar.accessory ?? 'none' }, 1, now);
+    const doat: Doat = {
+      id, workspaceId: gwiraStateRef.current.workspace.id, createdAt: now, updatedAt: now,
+      identity: { name: draft.name, role: draft.role, department: draft.roleCategory.replaceAll('_', ' '), description: draft.objective, personality: draft.personality, communicationStyle: draft.communicationStyle },
+      intelligence: providerAvailable ? { providerId: 'codex-local', providerAvailability: 'configured', instructions: draft.instructions, businessContextRefs: [] } : { providerId: 'unavailable', providerAvailability: 'unavailable', unavailableReason: 'The local Codex CLI is not available.', instructions: draft.instructions, businessContextRefs: [] },
+      capabilities: providerAvailable ? [{ id: 'codex-cli', name: 'Local Codex CLI', kind: 'tool', providerId: 'codex-local', available: true }] : [],
+      governance: { supervisorPersonId: draft.supervisorId, autonomy: draft.approvalRequired ? 'approval-required' : 'supervised', approvalRequired: draft.approvalRequired, allowedProjectPaths: [], maxConcurrentRuns: 1 },
+      appearance: { active: visual, history: [visual] },
+      operations: { status: providerAvailable ? 'idle' : 'unavailable', updatedAt: now }
+    };
+    setGwiraState((current) => {
+      let next = current;
+      // The matching coding Agent is intentionally created only for the actual
+      // local provider. The shared id lets the proven task bridge remain intact.
+      if (providerAvailable) next = reduceGwira(next, { type: 'ADD_AGENT', agent: { id, workspaceId: current.workspace.id, name: draft.name, type: 'coding', createdAt: now } });
+      next = reduceGwira(next, { type: 'ADD_DOAT', doat, at: now, activityId: gwiraId() });
+      gwiraStateRef.current = next;
+      return next;
+    });
+    setSelectedDoatId(id);
+    setDoatScreen('profile');
+    setError(undefined);
+  }
+
+  function updateDoatStatus(doatId: string, status: 'paused' | 'idle'): void {
+    const current = gwiraStateRef.current.doats.find((item) => item.id === doatId) as Doat | undefined;
+    if (!current || current.archivedAt) return;
+    const now = new Date().toISOString();
+    dispatchGwira({ type: 'UPDATE_DOAT', doat: { ...current, updatedAt: now, operations: { ...current.operations, status, updatedAt: now } }, at: now, activityId: gwiraId() });
+  }
+
+  function archiveDoat(doatId: string): void {
+    const current = gwiraStateRef.current.doats.find((item) => item.id === doatId) as Doat | undefined;
+    if (!current || current.operations.status === 'working') { setError('Stop active work before archiving a Doat.'); return; }
+    const now = new Date().toISOString();
+    dispatchGwira({ type: 'UPDATE_DOAT', doat: { ...current, updatedAt: now, archivedAt: now, operations: { ...current.operations, status: 'unavailable', updatedAt: now } }, at: now, activityId: gwiraId() });
+    setDoatScreen('directory'); setSelectedDoatId(undefined);
+  }
+
+  function renameWorkspace(name: string): void {
+    dispatchGwira({ type: 'RENAME_WORKSPACE', name, at: new Date().toISOString(), activityId: gwiraId() });
+  }
+
+  function updateOrganizationStructure(structure: OrganizationStructure): void {
+    const now = new Date().toISOString();
+    dispatchGwira({ type: 'SET_ORGANIZATION_STRUCTURE', structure, at: now, activityId: gwiraId() });
+  }
+
+  function updateOnboarding(onboarding: LocalOnboardingState): void {
+    dispatchGwira({ type: 'SET_ONBOARDING', onboarding });
+  }
+
+  function continueOnboarding(): void {
+    const now = new Date().toISOString();
+    setGwiraState((current) => {
+      const nextOnboarding = nextOnboardingState(current.onboarding, now);
+      let next = reduceGwira(current, { type: 'SET_ONBOARDING', onboarding: nextOnboarding });
+      if (current.onboarding.currentStep === 'organization' && current.onboarding.profile.organizationModel) {
+        next = reduceGwira(next, { type: 'SET_ORGANIZATION_STRUCTURE', structure: { ...next.organizationStructure, model: current.onboarding.profile.organizationModel, updatedAt: now }, at: now, activityId: gwiraId() });
+      }
+      gwiraStateRef.current = next;
+      return next;
+    });
+  }
+
+  function openBusinessTask(taskId: string): void {
+    if (!gwiraStateRef.current.tasks.some((task) => task.id === taskId)) {
+      setError('This task is not available in the current workspace.');
+      return;
+    }
+    openWorkspaceDestination({ type: 'task', taskId });
+  }
+
+  function linkActiveCodexProject(): void {
+    if (!activeProject) { setError('Add or select a local Codex project before linking it to Gwira work.'); return; }
+    if (gwiraStateRef.current.projects.some((project) => project.codingProjectPath === activeProject.path)) {
+      setError('That local Codex project is already linked to this workspace.');
+      return;
+    }
+    const now = new Date().toISOString();
+    dispatchGwira({ type: 'ADD_PROJECT', project: { id: gwiraId(), workspaceId: gwiraStateRef.current.workspace.id, name: activeProject.name, codingProjectPath: activeProject.path, createdAt: now }, activityId: gwiraId() });
+    setError(undefined);
+  }
+
+  async function startCodingTask(taskId: string): Promise<void> {
+    if (codingTaskLaunchesRef.current.has(taskId)) return;
+    const validation = validateCodingTaskLaunch(gwiraStateRef.current, taskId, projectStateRef.current.projects);
+    if (!validation.ok) { setError(`Cannot start coding task: ${validation.reason.replaceAll('-', ' ')}.`); return; }
+    if (validation.task.status !== 'todo') { setError('Move the task to To do before starting the coding agent.'); return; }
+    const doat = validation.task.assignee?.kind === 'agent' ? gwiraStateRef.current.doats.find((item) => item.id === validation.task.assignee?.id) as Doat | undefined : undefined;
+    if (doat) {
+      const activeExecutionCount = gwiraStateRef.current.tasks.filter((task) => task.assignee?.kind === 'agent' && task.assignee.id === doat.id && task.agentRun?.status === 'running').length;
+      const plan = planDoatExecution({ doat: { id: doat.id, active: !doat.archivedAt, providerId: doat.intelligence.providerId, paused: doat.operations.status === 'paused', concurrentExecutionLimit: doat.governance.maxConcurrentRuns, activeExecutionCount }, task: validation.task, codingProjectApproved: Boolean(validation.project), codingBridgeAccepted: true });
+      if (!plan.ok) { setError(`Cannot start Doat task: ${plan.message}`); return; }
+    }
+    codingTaskLaunchesRef.current.add(taskId);
+    setStartingCodingTaskIds((ids) => new Set(ids).add(taskId));
+    setError(undefined);
+    const now = new Date().toISOString();
+    let startedSession: CodexSession | undefined;
+    try {
+      const targetSession = await window.codexDesktop.startSession(createCodingTaskStartRequest(validation));
+      startedSession = targetSession;
+      const runningSession: CodexSession = {
+        ...targetSession,
+        status: 'running',
+        permissionMode: 'default',
+        webSearch: false,
+        messages: [...targetSession.messages, { id: `task-${targetSession.id}`, role: 'user', text: validation.task.description ? `${validation.task.title}\n\n${validation.task.description}` : validation.task.title, createdAt: now }],
+        updatedAt: now
+      };
+      cacheSession(runningSession);
+      setGwiraState((current) => {
+        let next = reduceGwira(current, { type: 'TRANSITION_TASK', taskId, status: 'in_progress', at: now, activityId: gwiraId(), actor: validation.task.assignee });
+        next = reduceGwira(next, { type: 'SET_AGENT_RUN', taskId, agentRun: associateCodingTaskSession(targetSession, now), at: now, activityId: gwiraId() });
+        gwiraStateRef.current = next;
+        return next;
+      });
+      await window.codexDesktop.sendInput({ ...createCodingTaskSendInputRequest(validation.task, targetSession.id), skipUserAppend: true });
+    } catch (value) {
+      codingTaskLaunchesRef.current.delete(taskId);
+      setStartingCodingTaskIds((ids) => { const next = new Set(ids); next.delete(taskId); return next; });
+      const message = value instanceof Error ? value.message : String(value);
+      setError(`Coding task could not start: ${message}`);
+      if (startedSession) {
+        const completedAt = new Date().toISOString();
+        setGwiraState((current) => {
+          const task = current.tasks.find((item) => item.id === taskId);
+          if (!task?.agentRun || task.agentRun.sessionId !== startedSession?.id) return current;
+          let next = reduceGwira(current, { type: 'SET_AGENT_RUN', taskId, agentRun: { ...task.agentRun, status: 'error', completedAt, error: message }, at: completedAt, activityId: gwiraId() });
+          if (task.status === 'in_progress') next = reduceGwira(next, { type: 'TRANSITION_TASK', taskId, status: 'blocked', at: completedAt, activityId: gwiraId(), actor: task.assignee });
+          return next;
+        });
+      }
+    }
+  }
+
+  async function stopCodingTask(taskId: string): Promise<void> {
+    const task = gwiraStateRef.current.tasks.find((item) => item.id === taskId);
+    if (!task?.agentRun) { setError('This task has no active coding-agent run.'); return; }
+    const allowed = validateCodingTaskStop(task, task.agentRun.sessionId);
+    if (!allowed.ok) { setError(`Cannot stop coding task: ${allowed.reason.replaceAll('-', ' ')}.`); return; }
+    intentionallyStoppedTaskSessionsRef.current.add(allowed.sessionId);
+    setStoppingCodingTaskIds((ids) => new Set(ids).add(taskId));
+    try {
+      await window.codexDesktop.stopSession({ sessionId: allowed.sessionId });
+    } catch (value) {
+      intentionallyStoppedTaskSessionsRef.current.delete(allowed.sessionId);
+      setStoppingCodingTaskIds((ids) => { const next = new Set(ids); next.delete(taskId); return next; });
+      setError(value instanceof Error ? value.message : 'Failed to stop coding task');
     }
   }
 
@@ -371,6 +928,19 @@ function App(): React.ReactElement {
     }
   }
 
+  function rememberHomeSession(project: ProjectEntry, conversationId: string, updatedAt: string): void {
+    try {
+      writeLastActiveHomeSession(localStorage, { projectId: project.id, projectPath: project.path, conversationId, updatedAt });
+    } catch {
+      // Session restoration is an enhancement; unavailable storage must not
+      // affect opening or continuing a conversation.
+    }
+  }
+
+  function forgetHomeSession(): void {
+    try { clearLastActiveHomeSession(localStorage); } catch { /* storage unavailable */ }
+  }
+
   function sessionsForProject(project: ProjectEntry): CodexSession[] {
     return Object.values(sessionsById).filter((item) => normalizeProjectPath(item.cwd) === normalizeProjectPath(project.path));
   }
@@ -381,11 +951,12 @@ function App(): React.ReactElement {
   }
 
   function openCachedSession(project: ProjectEntry, nextSession: CodexSession): void {
-    setActiveView('chat');
+    setActiveView('home');
     setProjectState((current) => ({ ...current, activeProjectId: project.id }));
     setExpandedProjectIds((current) => ensureExpandedProject(current, project.id));
     setError(undefined);
     activateSession(nextSession);
+    if (nextSession.codexConversationId) rememberHomeSession(project, nextSession.codexConversationId, nextSession.updatedAt);
   }
 
   function refreshAllProjectHistories(): void {
@@ -397,13 +968,18 @@ function App(): React.ReactElement {
   async function refreshProjectHistories(projectPath: string): Promise<void> {
     const project = projectStateRef.current.projects.find((item) => item.path === projectPath);
     if (!project) return;
-    const histories = await window.codexDesktop.listHistories(project.path);
-    setHistoriesByProject((current) => {
-      const projectCompletedSessions = Object.values(sessionsByIdRef.current)
-        .filter((item) => item.status !== 'running' && normalizeProjectPath(item.cwd) === normalizeProjectPath(project.path));
-      const mergedHistories = projectCompletedSessions.reduce(mergeSessionIntoProjectHistories, histories);
-      return { ...current, [project.id]: mergedHistories };
-    });
+    try {
+      const histories = await window.codexDesktop.listHistories(project.path);
+      if (!projectStateRef.current.projects.some((item) => item.id === project.id && item.path === project.path)) return;
+      setHistoriesByProject((current) => {
+        const projectCompletedSessions = Object.values(sessionsByIdRef.current)
+          .filter((item) => item.status !== 'running' && normalizeProjectPath(item.cwd) === normalizeProjectPath(project.path));
+        const mergedHistories = projectCompletedSessions.reduce(mergeSessionIntoProjectHistories, histories);
+        return { ...current, [project.id]: mergedHistories };
+      });
+    } catch (errorValue) {
+      setError(errorValue instanceof Error ? errorValue.message : 'Failed to load project history');
+    }
   }
 
   function mergeCompletedSessionHistory(completedSession: CodexSession): void {
@@ -416,20 +992,22 @@ function App(): React.ReactElement {
   }
 
   function startNewThread(project = activeProject): void {
-    if (!project) return;
-    setActiveView('chat');
-    setProjectState((current) => ({ ...current, activeProjectId: project.id }));
-    setExpandedProjectIds((current) => ensureExpandedProject(current, project.id));
+    showHomeTabWithoutRestore();
+    if (project) {
+      setProjectState((current) => ({ ...current, activeProjectId: project.id }));
+      setExpandedProjectIds((current) => ensureExpandedProject(current, project.id));
+    }
     activateSession(undefined);
     setInput('');
     setAttachments([]);
     setSelectedSkills([]);
     setSelectedFiles([]);
     setError(undefined);
+    forgetHomeSession();
   }
 
   function selectProject(project: ProjectEntry): void {
-    setActiveView('chat');
+    setActiveView('home');
     setOpenProjectMenuId(undefined);
     setProjectMenuPosition(undefined);
     setProjectSelectorOpen(false);
@@ -465,16 +1043,43 @@ function App(): React.ReactElement {
       setHistoriesByProject((current) => ({ ...current, [project.id]: refreshedHistories }));
       targetHistory = refreshedHistories.find((item) => item.id === history.id) ?? history;
     }
-    const nextSession = await window.codexDesktop.resumeSession({
-      cwd: project.path,
-      codexConversationId: targetHistory.id,
-      title: targetHistory.title,
-      filePath: targetHistory.filePath,
-      model,
-      reasoningEffort,
-      permissionMode
-    });
-    activateSession(nextSession);
+    try {
+      const recordedModel = targetHistory.model;
+      const nextSession = await window.codexDesktop.resumeSession({
+        cwd: project.path,
+        codexConversationId: targetHistory.id,
+        title: targetHistory.title,
+        filePath: targetHistory.filePath,
+        // An existing thread owns its model identity.  Passing the selector's
+        // current value here would silently switch the provider/model on resume.
+        model: recordedModel,
+        reasoningEffort,
+        permissionMode
+      });
+      if (recordedModel) {
+        if (availableModels.some((candidate) => candidate.slug === recordedModel)) setModel(recordedModel);
+        else setError(`This conversation uses ${recordedModel}, which is not available from the configured provider. Choose an available model before continuing.`);
+      }
+      activateSession(nextSession);
+      rememberHomeSession(project, targetHistory.id, targetHistory.updatedAt);
+    } catch (errorValue) {
+      setError(errorValue instanceof Error ? errorValue.message : 'Failed to open thread');
+    }
+  }
+
+  async function loadConversationTab(project: ProjectEntry, conversationId: string): Promise<void> {
+    try {
+      const histories = await window.codexDesktop.listHistories(project.path);
+      setHistoriesByProject((current) => ({ ...current, [project.id]: histories }));
+      const history = histories.find((item) => item.id === conversationId);
+      if (!history) {
+        setError('This conversation is no longer available in the selected project.');
+        return;
+      }
+      await openHistory(project, history);
+    } catch (errorValue) {
+      setError(errorValue instanceof Error ? errorValue.message : 'Failed to restore this conversation tab.');
+    }
   }
 
   function requestDeleteHistory(event: React.MouseEvent<HTMLButtonElement>, project: ProjectEntry, history: CodexThreadHistory): void {
@@ -503,10 +1108,39 @@ function App(): React.ReactElement {
         [target.project.id]: (current[target.project.id] || []).filter((history) => history.id !== target.history.id)
       }));
       if (sessionRef.current?.codexConversationId === target.history.id) activateSession(undefined);
+      try {
+        if (readLastActiveHomeSession(localStorage)?.conversationId === target.history.id) forgetHomeSession();
+      } catch { /* storage unavailable */ }
       void refreshProjectHistories(target.project.path);
     } catch (errorValue) {
       setError(errorValue instanceof Error ? errorValue.message : 'Failed to delete thread');
     }
+  }
+
+  async function restoreLastActiveHomeSession(): Promise<void> {
+    let saved;
+    try { saved = readLastActiveHomeSession(localStorage); } catch { return; }
+    if (!saved) return;
+    const project = projectStateRef.current.projects.find((item) => item.id === saved.projectId && normalizeProjectPath(item.path) === normalizeProjectPath(saved.projectPath));
+    if (!project) { forgetHomeSession(); return; }
+    try {
+      const histories = await window.codexDesktop.listHistories(project.path);
+      const history = histories.find((item) => item.id === saved!.conversationId);
+      setHistoriesByProject((current) => ({ ...current, [project.id]: histories }));
+      if (!history) { forgetHomeSession(); return; }
+      await openHistory(project, history);
+    } catch {
+      // An unavailable disk entry is treated like a missing session. Home
+      // remains a clean New Chat state rather than surfacing stale content.
+      forgetHomeSession();
+      activateSession(undefined);
+    }
+  }
+
+  function openHome(): void {
+    setActiveView('home');
+    if (sessionRef.current) return;
+    void restoreLastActiveHomeSession();
   }
 
   function handleThreadRowKeyDown(event: React.KeyboardEvent<HTMLElement>, action: () => void): void {
@@ -529,7 +1163,6 @@ function App(): React.ReactElement {
       });
       activateSession(undefined);
       setProjectOnboardingOpen(false);
-      setProjectOnboardingDismissed(false);
       setError(undefined);
     }
   }
@@ -546,7 +1179,6 @@ function App(): React.ReactElement {
     });
     setSelectedOnboardingProjectIds(new Set());
     setProjectOnboardingOpen(false);
-    setProjectOnboardingDismissed(false);
     setError(undefined);
   }
 
@@ -586,26 +1218,29 @@ function App(): React.ReactElement {
     cacheSession({ ...session, status: 'idle' });
   }
 
-  async function sendPrompt(): Promise<void> {
-    const prompt = buildPromptWithAttachments(input, { attachments, skills: selectedSkills, files: selectedFiles }).trim();
-    if (!prompt || activeStatus === 'running') return;
+  async function sendPrompt(directPrompt?: string, context: 'business' | 'coding' = 'coding', existingSession?: CodexSession): Promise<boolean> {
+    const prompt = (directPrompt ?? buildPromptWithAttachments(input, { attachments, skills: selectedSkills, files: selectedFiles })).trim();
+    if (!prompt || activeStatus === 'running') return false;
     if (shouldBlockSendWithoutProject(projectState.projects.length) || !activeProject) {
       setProjectOnboardingOpen(true);
-      return;
+      return false;
     }
-    setInput('');
-    setAttachments([]);
-    setSelectedSkills([]);
-    setSelectedFiles([]);
+    const currentSession = existingSession ?? sessionRef.current;
+    if (currentSession && !availableModels.some((candidate) => candidate.slug === currentSession.model)) {
+      setError(`This conversation uses ${currentSession.model}, which is unavailable. Choose an available model to continue.`);
+      return false;
+    }
+    if (!directPrompt) { setInput(''); setAttachments([]); setSelectedSkills([]); setSelectedFiles([]); }
     setError(undefined);
 
     try {
-      const targetSession = session ?? await window.codexDesktop.startSession({
+      const targetSession = currentSession ?? await window.codexDesktop.startSession({
         cwd: activeProject.path,
         model,
         reasoningEffort,
         permissionMode,
-        webSearch: false
+        webSearch: false,
+        context
       });
       const optimisticMessage: SessionMessage = {
         id: `user-${Date.now()}`,
@@ -619,16 +1254,72 @@ function App(): React.ReactElement {
         reasoningEffort,
         permissionMode,
         webSearch: false,
+        context: targetSession.context ?? context,
         status: 'running',
         messages: [...targetSession.messages, optimisticMessage],
         updatedAt: optimisticMessage.createdAt
       };
       activateSession(runningSession);
-      await window.codexDesktop.sendInput({ sessionId: targetSession.id, input: prompt, model, reasoningEffort, permissionMode, webSearch: false, skipUserAppend: true });
+      const selectedModel = targetSession.context === 'business' || context === 'business' ? targetSession.model : model;
+      await window.codexDesktop.sendInput({ sessionId: targetSession.id, input: prompt, model: selectedModel, reasoningEffort, permissionMode, webSearch: false, skipUserAppend: true });
+      return true;
     } catch (sendError) {
       const message = sendError instanceof Error ? sendError.message : String(sendError);
-      setError(message);
+      setError('Couldn\'t connect to the AI service. Check your connection or model settings.');
       if (sessionRef.current) cacheSession({ ...sessionRef.current, status: 'error', error: message });
+      return false;
+    }
+  }
+
+  async function startDashboardConversation(message: string): Promise<boolean> {
+    if (!activeProject || activeStatus === 'running' || dashboardHandoffRef.current) return false;
+    dashboardHandoffRef.current = true;
+    // Creating the session before navigation gives the handoff a stable id and
+    // means Strict Mode or a rerender cannot submit this message twice.
+    try {
+      const targetSession = await window.codexDesktop.startSession({ cwd: activeProject.path, model, reasoningEffort, permissionMode, webSearch: false, context: 'business' });
+      activateSession(targetSession);
+      showHomeTabWithoutRestore();
+      const accepted = await sendPrompt(message, 'business', targetSession);
+      if (!accepted) dashboardHandoffRef.current = false;
+      return accepted;
+    } catch (handoffError) {
+      dashboardHandoffRef.current = false;
+      setError(handoffError instanceof Error ? handoffError.message : 'Could not start a new conversation.');
+      return false;
+    }
+  }
+
+  function askAboutDashboardRecord(recordId: string): void {
+    showHomeTabWithoutRestore();
+    setInput(`Regarding record ${recordId}: `);
+  }
+
+  function selectModel(nextModel: string): void {
+    setModel(nextModel);
+    const current = sessionRef.current;
+    if (!current || current.status === 'running' || current.model === nextModel) return;
+    // This affects only the live continuation. Historical session metadata is
+    // immutable, so a deliberate replacement remains explicit to the user.
+    cacheSession({ ...current, model: nextModel, error: undefined });
+    setError(undefined);
+  }
+
+  async function retryBusinessPrompt(): Promise<boolean> {
+    const current = sessionRef.current;
+    const lastUserMessage = [...(current?.messages ?? [])].reverse().find((message) => message.role === 'user');
+    if (!current || !lastUserMessage || current.status === 'running') return false;
+    const running = { ...current, status: 'running' as const, error: undefined };
+    cacheSession(running);
+    setError(undefined);
+    try {
+      await window.codexDesktop.sendInput({ sessionId: current.id, input: lastUserMessage.text, model: current.model, reasoningEffort: current.reasoningEffort, permissionMode: current.permissionMode, webSearch: false, skipUserAppend: true });
+      return true;
+    } catch (retryError) {
+      const message = retryError instanceof Error ? retryError.message : String(retryError);
+      cacheSession({ ...current, status: 'error', error: message });
+      setError('Couldn\'t connect to the AI service. Check your connection or model settings.');
+      return false;
     }
   }
 
@@ -763,6 +1454,8 @@ function App(): React.ReactElement {
     setSkillsLoading(true);
     try {
       setAvailableSkills(await window.codexDesktop.listSkills());
+    } catch (errorValue) {
+      setError(errorValue instanceof Error ? errorValue.message : 'Failed to load skills');
     } finally {
       setSkillsLoading(false);
     }
@@ -821,117 +1514,123 @@ function App(): React.ReactElement {
     }
     const rect = button.getBoundingClientRect();
     const menuWidth = 258;
-    const menuHeight = 142;
+    const menuHeight = 250;
     setOpenProjectMenuId(project.id);
+    projectMenuTriggerRef.current = button;
     setProjectMenuPosition({
       top: Math.min(rect.bottom + 7, window.innerHeight - menuHeight - 10),
       left: Math.max(10, Math.min(rect.right - menuWidth + 18, window.innerWidth - menuWidth - 10))
     });
   }
 
+  function requestPermissionMode(nextMode: PermissionMode): void {
+    const selection = permissionSelection(permissionMode, nextMode);
+    setPermissionMode(selection.mode);
+    setFullAccessConfirmationOpen(selection.requiresConfirmation);
+  }
+
   async function switchBranch(branch: string): Promise<void> {
     if (!activeProject || activeStatus === 'running') return;
     const project = activeProject;
     setBranchMenuOpen(false);
-    const next = await window.codexDesktop.switchGitBranch({ cwd: project.path, branch });
-    setBranchInfoByProject((current) => ({ ...current, [project.id]: next }));
+    try {
+      const next = await window.codexDesktop.switchGitBranch({ cwd: project.path, branch });
+      setBranchInfoByProject((current) => ({ ...current, [project.id]: next }));
+    } catch (errorValue) {
+      setError(errorValue instanceof Error ? errorValue.message : 'Failed to switch Git branch');
+    }
   }
 
   return (
-    <main className="shell">
-      <aside className="sidebar">
-        <div className="traffic-spacer" aria-hidden="true" />
-        <div className="nav-block top-actions">
-          <button className={`ghost-button ${activeView === 'chat' ? 'active' : ''}`} onClick={() => startNewThread()}><NewThreadIcon className="nav-icon" /> New thread</button>
-          <button className="ghost-button"><AutomationsIcon className="nav-icon" /> Automations</button>
-          <button className={`ghost-button ${activeView === 'skills' ? 'active' : ''}`} onClick={() => setActiveView('skills')}><SkillsNavIcon className="nav-icon" /> Skills</button>
-        </div>
+    <main className="shell" data-sidebar={effectiveSidebarCollapsed ? 'collapsed' : 'expanded'} data-narrow={narrowWindow ? 'true' : undefined}>
+      <GlobalTopBar
+        tabs={workspaceTabs.tabs}
+        activeTabId={workspaceTabs.activeTabId}
+        choices={workspaceTabChoices}
+        labelFor={labelForWorkspaceTab}
+        canGoBack={canGoBack}
+        canGoForward={canGoForward}
+        sidebarCollapsed={effectiveSidebarCollapsed}
+        inspectorAvailable={activeView === 'dashboard'}
+        inspectorOpen={dashboardInspectorOpen}
+        pendingNotifications={inboxCounts(gwiraState).pendingApprovals}
+        onGoBack={goBack}
+        onGoForward={goForward}
+        onToggleSidebar={toggleSidebar}
+        onToggleInspector={() => setDashboardInspectorOpen((open) => !open)}
+        onActivate={activateWorkspaceTab}
+        onClose={closeWorkspaceDestination}
+        onOpen={openWorkspaceDestination}
+        onOpenInbox={() => openWorkspaceView('inbox')}
+        onReorder={(tabId, targetId) => persistWorkspaceTabs(reorderWorkspaceTab(workspaceTabsRef.current, tabId, targetId))}
+        onSwitchRelative={switchWorkspaceTab}
+      />
+      <ProjectSidebar
+        dashboardSidebar={<DashboardSidebar state={gwiraState} activeView={activeView} onNavigate={openWorkspaceView} onOpenDoat={(id) => openWorkspaceDestination({ type: 'doat', doatId: id })} onOpenPerson={() => openWorkspaceView('teams')} onCreateDoat={() => { setDoatScreen('create'); openWorkspaceView('doats'); }} onAddPerson={() => openWorkspaceView('teams')} />}
+        activeProject={activeProject}
+        activeSession={session}
+        activeSessionId={activeSessionId}
+        activeView={activeView}
+        expandedProjectIds={expandedProjectIds}
+        historiesByProject={historiesByProject}
+        projects={projectState.projects}
+        sessionsForProject={sessionsForProject}
+        formatRelativeTime={formatRelativeTime}
+        onAddProject={addProjectFromPicker}
+        onDeleteHistory={requestDeleteHistory}
+        onNewThread={startNewThread}
+        onOpenHistory={(project, history) => openWorkspaceDestination({ type: 'conversation', projectId: project.id, conversationId: history.id })}
+        onOpenSession={(project, nextSession) => {
+          if (nextSession.codexConversationId) {
+            openWorkspaceDestination({ type: 'conversation', projectId: project.id, conversationId: nextSession.codexConversationId });
+          } else {
+            openWorkspaceView('home');
+            openCachedSession(project, nextSession);
+          }
+        }}
+        onProjectKeyDown={handleThreadRowKeyDown}
+        collapsed={effectiveSidebarCollapsed}
+        overlay={narrowWindow && narrowSidebarOpen}
+        onSelectBusinessView={openWorkspaceView}
+        onOpenHome={() => openWorkspaceView('home')}
+        onSelectSkills={() => openWorkspaceView('skills')}
+        onToggleProject={toggleProject}
+        onToggleProjectMenu={toggleProjectMenu}
+        openProjectMenuId={openProjectMenuId}
+      />
 
-        <section className="threads-section">
-          <div className="section-title">
-            <span>Threads</span>
-            <span className="section-tools">
-              <button className="section-tool-button" type="button" onClick={addProjectFromPicker} title="Add project"><FolderPlusIcon className="section-tool-icon" /></button>
-              <span className="section-tool-icon">≡</span>
-            </span>
-          </div>
-          <div className="threads-scroll">
-            {projectState.projects.map((project) => {
-              const histories = historiesByProject[project.id] || [];
-              const expanded = expandedProjectIds.has(project.id);
-              return (
-                <div className="project-group" key={project.id}>
-                  <div className={`project-pill ${project.id === activeProject?.id ? 'active' : ''}`} onClick={() => toggleProject(project)}>
-                    <span className={expanded ? 'disclosure open' : 'disclosure'} aria-hidden="true" />
-                    <FolderIcon className="folder-icon" />
-                    <strong>{project.name}</strong>
-                    <div className="project-actions">
-                      <button className="project-menu-button" onClick={(event) => { event.stopPropagation(); toggleProjectMenu(project, event.currentTarget); }} title="Project options">•••</button>
-                      <button className="project-edit-button" onClick={(event) => { event.stopPropagation(); void addProjectFromPicker(); }} title="Switch project path">✎</button>
-                    </div>
-                  </div>
-                  {getProjectThreadRows({
-                    projectId: project.id,
-                    activeProjectId: activeProject?.id,
-                    activeConversationId: session?.codexConversationId,
-                    activeSessionId,
-                    hasDraftSession: Boolean(session),
-                    expandedProjectIds,
-                    histories,
-                    sessions: sessionsForProject(project)
-                  }).map((row) => row.kind === 'new-thread' ? (
-                    <button className={`thread-item new-thread-row ${row.active ? 'active-thread' : ''}`} key={`${project.id}:new`} onClick={() => startNewThread(project)}>
-                      <span className="thread-title">New thread</span><span className="thread-time">{row.active ? 'now' : '+'}</span>
-                    </button>
-                  ) : row.kind === 'session' ? (
-                    <div
-                      className={`thread-item ${row.active ? 'active-thread' : ''}`}
-                      key={row.session.id}
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => openCachedSession(project, row.session)}
-                      onKeyDown={(event) => handleThreadRowKeyDown(event, () => openCachedSession(project, row.session))}
-                    >
-                      <span className="thread-title">{row.title}</span><span className="thread-time">{row.running ? <ThreadSpinner /> : formatRelativeTime(row.session.updatedAt)}</span>
-                    </div>
-                  ) : (
-                    <div
-                      className={`thread-item history-thread ${row.active ? 'active-thread' : ''} ${row.running ? 'running-thread' : ''}`}
-                      key={row.history.id}
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => void openHistory(project, row.history)}
-                      onKeyDown={(event) => handleThreadRowKeyDown(event, () => { void openHistory(project, row.history); })}
-                    >
-                      <span className="thread-title">{row.history.title}</span>
-                      <span className="thread-time">{row.running ? <ThreadSpinner /> : formatRelativeTime(row.history.updatedAt)}</span>
-                      {!row.running ? (
-                        <button className="delete-thread-button" type="button" title="Delete thread" aria-label={`Delete ${row.history.title}`} onClick={(event) => requestDeleteHistory(event, project, row.history)}>
-                          <DeleteThreadIcon />
-                        </button>
-                      ) : null}
-                    </div>
-                  ))}
-                </div>
-              );
-            })}
-          </div>
-        </section>
-
-        <button className="add-project" onClick={addProjectFromPicker}><FolderPlusIcon className="sidebar-action-icon" /> Add project</button>
-        <button className="settings"><SettingsIcon className="sidebar-action-icon" /> Settings</button>
-      </aside>
+      {error || unavailableModel ? <div className={`global-error-banner${unavailableModel ? ' has-model-recovery' : ''}`} role="alert">
+        <span>{error ?? `This conversation uses ${unavailableModel}, which is not available from the configured provider.`}</span>
+        {unavailableModel ? <div className="model-recovery" role="group" aria-label="Choose an available model for this conversation">
+          <small>Your conversation history is unchanged. Pick a model to continue with:</small>
+          {availableModels.map((option) => <button key={option.slug} type="button" data-model-recovery={option.slug} disabled={session?.status === 'running'} onClick={() => selectModel(option.slug)}>Continue with {option.slug}</button>)}
+        </div> : null}
+        {error ? <button type="button" aria-label="Dismiss error" onClick={() => setError(undefined)}>Dismiss</button> : null}
+      </div> : null}
 
       {openProjectMenu && projectMenuPosition ? (
         <div className="project-menu project-menu-floating" ref={projectMenuRef} style={{ top: projectMenuPosition.top, left: projectMenuPosition.left }} onClick={(event) => event.stopPropagation()}>
-          <button onClick={() => selectProject(openProjectMenu)}>↗ Create permanent worktree</button>
-          <button onClick={() => { setOpenProjectMenuId(undefined); setProjectMenuPosition(undefined); }}>✎ Edit name</button>
+          <button disabled title="Project pinning is not implemented yet.">☆ Pin project</button>
+          <button disabled title="Task views are not available for projects yet.">✓ View associated tasks</button>
+          <button disabled title="Opening the local project directory is not implemented yet.">↗ View local directory</button>
+          <hr />
+          <button disabled title="Project details editing is not implemented yet.">✎ Edit project details</button>
           <button className="danger" onClick={() => removeProjectById(openProjectMenu.id)}>× Remove</button>
         </div>
       ) : null}
 
       {bootstrapStatus && !bootstrapStatus.installed && bootstrapHelpOpen ? (
         <BootstrapHelpModal status={bootstrapStatus} onClose={() => setBootstrapHelpOpen(false)} onRestart={() => window.codexDesktop.restartApp()} />
+      ) : null}
+
+      {fullAccessConfirmationOpen ? (
+        <FullAccessConfirmationModal
+          onCancel={() => setFullAccessConfirmationOpen(false)}
+          onConfirm={() => {
+            setPermissionMode('full-access');
+            setFullAccessConfirmationOpen(false);
+          }}
+        />
       ) : null}
 
       {historyDeleteTarget ? (
@@ -953,7 +1652,6 @@ function App(): React.ReactElement {
           onToggleProject={toggleOnboardingProject}
           onToggleAll={toggleAllOnboardingProjects}
           onClose={() => {
-            setProjectOnboardingDismissed(true);
             setProjectOnboardingOpen(false);
           }}
         />
@@ -964,14 +1662,30 @@ function App(): React.ReactElement {
           activeProjectId={activeProject?.id}
           position={projectSelectorPosition}
           projects={projectState.projects}
-          onSelect={selectProject}
+          onSelect={(project) => openWorkspaceDestination({ type: 'project', projectId: project.id })}
           onClose={() => { setProjectSelectorOpen(false); setProjectSelectorPosition(undefined); }}
           onAddProject={addProjectFromPicker}
         />
       ) : null}
 
-      <section className="workspace" ref={workspaceRef}>
-        {activeView === 'skills' ? (
+      <WorkspaceShell
+        activeView={activeView}
+        workspaceRef={workspaceRef}
+        businessViews={{
+          library: <LibraryPage />,
+          dashboard: <DashboardPage state={gwiraState} panelOpen={dashboardInspectorOpen} onPanelOpenChange={setDashboardInspectorOpen} onStartConversation={startDashboardConversation} onAskAboutRecord={askAboutDashboardRecord} onOpenTask={openBusinessTask} onCreateTask={createTask} onUpdateTask={updateTask} />,
+          inbox: <InboxPage state={gwiraState} onOpenTask={openBusinessTask} />,
+          'my-work': <MyWorkPage state={gwiraState} onCreateTask={createTask} onUpdateTask={updateTask} onTransitionTask={transitionTask} onAddComment={addTaskComment} onDecideApproval={decideApproval} onStartCodingTask={(taskId) => { void startCodingTask(taskId); }} onStopCodingTask={(taskId) => { void stopCodingTask(taskId); }} startingTaskIds={startingCodingTaskIds} stoppingTaskIds={stoppingCodingTaskIds} requestedTaskId={requestedBusinessTaskId} onRequestedTaskOpened={() => setRequestedBusinessTaskId(undefined)} activeCodexProjectName={activeProject?.name} onLinkActiveCodexProject={linkActiveCodexProject} />,
+          organization: <OrganizationPage state={gwiraState} onUpdate={updateOrganizationStructure} onOpenTask={openBusinessTask} />,
+          teams: <TeamsPage state={gwiraState} onAddPerson={addPerson} />,
+          agents: <AgentsPage state={gwiraState} onAddCodingAgent={addCodingAgent} />,
+          doats: doatScreen === 'create' ? <DoatCreationWizard supervisors={gwiraState.people.map((person) => ({ id: person.id, name: person.name }))} providerAvailable={bootstrapStatus?.installed === true} providerLabel={bootstrapStatus?.installed ? 'Local Codex CLI is available for supported coding tasks.' : 'Local Codex CLI is unavailable.'} onCancel={() => setDoatScreen('directory')} onCreate={createDoat} />
+            : doatScreen === 'profile' && selectedDoat ? <DoatProfile doat={selectedDoat} onBack={() => { setDoatScreen('directory'); setSelectedDoatId(undefined); }} onPause={(id) => updateDoatStatus(id, 'paused')} onResume={(id) => updateDoatStatus(id, 'idle')} onArchive={archiveDoat} onAssignTask={() => openWorkspaceView('my-work')} />
+              : <DoatDirectory doats={doatRecords.filter((entry) => !entry.archived)} onOpenDoat={(id) => { setSelectedDoatId(id); setDoatScreen('profile'); }} onCreateDoat={() => setDoatScreen('create')} />,
+          integrations: <IntegrationsCatalogPage catalog={INTEGRATION_CATALOG} />,
+          settings: <SettingsPage state={gwiraState} onRenameWorkspace={renameWorkspace} />
+        }}
+        skills={(
           <SkillsView
             skills={availableSkills}
             search={skillSearch}
@@ -983,27 +1697,31 @@ function App(): React.ReactElement {
             onOpen={(skillId) => { void openSkillDetail(skillId); }}
             onToggle={(skillId, enabled) => { void setSkillEnabled(skillId, enabled); }}
           />
-        ) : (
+        )}
+        chat={(
         <>
         <header className="topbar">
-          <div className="thread-heading"><strong>{currentTitle}</strong><span>{activeProject?.name || 'No project'}</span><span>•••</span></div>
+          {hasConversationBreadcrumb ? <div className="thread-heading"><strong>{currentTitle}</strong><span>{activeProject?.name || 'No project'}</span><span>•••</span></div> : null}
         </header>
 
         <div className="content" ref={transcriptRef}>
           {!session || session.messages.length === 0 ? (
             <Welcome
-              projectName={activeProject?.name || 'No project'}
+              projectName={activeProject?.name || gwiraState.workspace.name}
               open={projectSelectorOpen}
               onToggle={toggleProjectSelector}
+              codingProject={Boolean(activeProject)}
             />
-          ) : <Transcript messages={session.messages} isRunning={activeStatus === 'running'} />}
+          ) : <Transcript messages={session.messages} isRunning={activeStatus === 'running'} hideSystem={session.context === 'business'} />}
         </div>
-
-        {error ? <div className="error-banner">{error}</div> : null}
 
         {!session ? (
           <section className="suggestions" aria-label="Quick prompts">
-            <button onClick={() => setInput('Build a classic Snake game in this repo.')}>🎮<span>Build a classic Snake game in this repo.</span></button>
+            {activeProject ? <button onClick={() => setInput('Help me plan and build the next change in this project.')}>⌘<span>Start a coding session</span></button> : <>
+              <button onClick={() => openWorkspaceView('my-work')}>✓<span>Create a task</span></button>
+              <button onClick={() => openWorkspaceView('doats')}>◌<span>Assign work to a Doat</span></button>
+              <button onClick={() => openWorkspaceView('inbox')}>↗<span>Review pending work</span></button>
+            </>}
           </section>
         ) : null}
 
@@ -1019,13 +1737,13 @@ function App(): React.ReactElement {
                 id="model"
                 className="model-inline-select"
                 value={model}
-                label={model.toUpperCase()}
+                label={unavailableModel ? `${unavailableModel.toUpperCase()} (unavailable)` : model.toUpperCase()}
                 options={availableModels.map((option) => ({ value: option.slug, label: option.slug.toUpperCase() }))}
                 open={inlineMenuOpen === 'model'}
                 disabled={activeStatus === 'running'}
                 menuRef={inlineMenuRef}
                 onOpenChange={(open) => setInlineMenuOpen(open ? 'model' : undefined)}
-                onChange={setModel}
+                onChange={selectModel}
               />
               <InlineSelect
                 id="reasoning"
@@ -1039,7 +1757,7 @@ function App(): React.ReactElement {
                 onChange={(value) => setReasoningEffort(value as ReasoningEffort)}
               />
             </div>
-            <div className="composer-actions">{activeStatus === 'running' ? <button className="send stop" onClick={stopSession} aria-label="Stop"><StopIcon /></button> : <button className="send" onClick={sendPrompt} disabled={!canSend}>↑</button>}</div>
+            <div className="composer-actions">{activeStatus === 'running' ? <button className="send stop" onClick={stopSession} aria-label="Stop"><StopIcon /></button> : <button className="send" onClick={() => void sendPrompt()} disabled={!canSend}>↑</button>}</div>
           </div>
         </section>
 
@@ -1056,7 +1774,7 @@ function App(): React.ReactElement {
               disabled={activeStatus === 'running'}
               menuRef={inlineMenuRef}
               onOpenChange={(open) => setInlineMenuOpen(open ? 'permission' : undefined)}
-              onChange={(value) => setPermissionMode(value as PermissionMode)}
+              onChange={(value) => requestPermissionMode(value as PermissionMode)}
             />
           </div>
           <div className="branch-control" ref={branchControlRef}>
@@ -1070,7 +1788,7 @@ function App(): React.ReactElement {
         </footer>
         </>
         )}
-      </section>
+      />
       {selectedSkillDetail ? (
         <SkillDetailModal
           skill={selectedSkillDetail}
@@ -1086,66 +1804,6 @@ function App(): React.ReactElement {
         />
       ) : null}
     </main>
-  );
-}
-
-function SkillsView({
-  skills,
-  search,
-  loading,
-  onSearch,
-  onRefresh,
-  onCreate,
-  onLearnMore,
-  onOpen,
-  onToggle
-}: {
-  skills: CodexSkillInfo[];
-  search: string;
-  loading: boolean;
-  onSearch: (value: string) => void;
-  onRefresh: () => void;
-  onCreate: () => void;
-  onLearnMore: () => void;
-  onOpen: (skillId: string) => void;
-  onToggle: (skillId: string, enabled: boolean) => void;
-}): React.ReactElement {
-  const filtered = skills.filter((skill) => {
-    const query = search.trim().toLowerCase();
-    if (!query) return true;
-    return `${skill.name} ${skill.description ?? ''} ${skill.id}`.toLowerCase().includes(query);
-  });
-
-  return (
-    <section className="skills-page">
-      <header className="skills-toolbar">
-        <button type="button" onClick={onRefresh} disabled={loading}>↻ Refresh</button>
-        <label className="skills-search">
-          <span>⌕</span>
-          <input value={search} onChange={(event) => onSearch(event.target.value)} placeholder="Search skills" />
-        </label>
-        <button className="new-skill-button" type="button" onClick={onCreate}>＋ New skill</button>
-      </header>
-      <div className="skills-heading">
-        <h1>Skills</h1>
-        <p>Give Codex superpowers. <button type="button" onClick={onLearnMore}>Learn more</button></p>
-      </div>
-      <h2 className="skills-section-title">Installed</h2>
-      <div className="skills-grid">
-        {filtered.map((skill) => (
-          <article className={`skill-card ${skill.enabled === false ? 'disabled' : ''}`} key={skill.id} onClick={() => onOpen(skill.id)}>
-            <SkillIcon skill={skill} />
-            <div>
-              <strong>{skill.name}</strong>
-              <span>{skill.description || 'No description'}</span>
-            </div>
-            <button className={`skill-toggle ${skill.enabled === false ? '' : 'on'}`} type="button" onClick={(event) => { event.stopPropagation(); onToggle(skill.id, skill.enabled === false); }} aria-label={`${skill.enabled === false ? 'Enable' : 'Disable'} ${skill.name}`}>
-              <span />
-            </button>
-          </article>
-        ))}
-      </div>
-    </section>
   );
 }
 
@@ -1279,59 +1937,6 @@ function ProjectWindowControls({ platform, onClose, onMinimize }: { platform?: s
   );
 }
 
-function InlineSelect({
-  id,
-  className = '',
-  value,
-  label,
-  options,
-  open,
-  disabled,
-  menuRef,
-  onOpenChange,
-  onChange
-}: {
-  id: string;
-  className?: string;
-  value: string;
-  label: string;
-  options: Array<{ value: string; label: string }>;
-  open: boolean;
-  disabled: boolean;
-  menuRef: React.RefObject<HTMLDivElement | null>;
-  onOpenChange: (open: boolean) => void;
-  onChange: (value: string) => void;
-}): React.ReactElement {
-  return (
-    <div className={`inline-select ${className} ${open ? 'open' : ''}`} ref={open ? menuRef : undefined}>
-      <button type="button" onClick={() => onOpenChange(!open)} disabled={disabled} aria-haspopup="listbox" aria-expanded={open} aria-label={id}>
-        <span>{label}</span>
-        <span className="select-chevron" aria-hidden="true" />
-      </button>
-      {open ? (
-        <div className="inline-select-menu" role="listbox">
-          {options.map((option) => (
-            <button
-              key={option.value}
-              type="button"
-              className={option.value === value ? 'selected' : ''}
-              role="option"
-              aria-selected={option.value === value}
-              onClick={() => {
-                onChange(option.value);
-                onOpenChange(false);
-              }}
-            >
-              <span>{option.value === value ? '✓' : ''}</span>
-              <strong>{option.label}</strong>
-            </button>
-          ))}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
 function BootstrapHelpModal({ status, onClose, onRestart }: { status: CodexBootstrapStatus; onClose: () => void; onRestart: () => void }): React.ReactElement {
   const missing = status.missing.length ? status.missing : ['Codex CLI'];
   const isWindows = status.platform === 'win32';
@@ -1369,6 +1974,22 @@ function BootstrapHelpModal({ status, onClose, onRestart }: { status: CodexBoots
           <span />
           <button className="try-skill" type="button" onClick={onRestart}>Restart app</button>
         </footer>
+      </section>
+    </div>
+  );
+}
+
+function FullAccessConfirmationModal({ onCancel, onConfirm }: { onCancel: () => void; onConfirm: () => void }): React.ReactElement {
+  return (
+    <div className="skill-modal-layer" onMouseDown={onCancel} role="presentation">
+      <section className="skill-modal" role="dialog" aria-modal="true" aria-labelledby="full-access-title" onMouseDown={(event) => event.stopPropagation()}>
+        <button className="skill-modal-close" type="button" onClick={onCancel} aria-label="Close">×</button>
+        <h2 id="full-access-title">Enable Full Access?</h2>
+        <p>Full Access lets Codex bypass sandboxing and approval checks for this desktop session. Only enable it for a project and prompt you trust.</p>
+        <div className="skill-modal-actions">
+          <button type="button" onClick={onCancel}>Keep workspace write</button>
+          <button className="danger" type="button" onClick={onConfirm}>Enable Full Access</button>
+        </div>
       </section>
     </div>
   );
@@ -1436,64 +2057,6 @@ function SkillIcon({ skill, large = false }: { skill: Pick<CodexSkillInfo, 'id' 
 
 function stripSkillFrontmatter(content: string): string {
   return content.replace(/^---\n[\s\S]*?\n---\n?/, '').trim() || 'No additional instructions.';
-}
-
-function Welcome({
-  projectName,
-  open,
-  onToggle
-}: {
-  projectName: string;
-  open: boolean;
-  onToggle: (button: HTMLButtonElement) => void;
-}): React.ReactElement {
-  return (
-    <section className="welcome">
-      <div className="codex-mark">›_</div>
-      <h1>Let’s build</h1>
-      <button className={open ? 'project-select open' : 'project-select'} type="button" onClick={(event) => onToggle(event.currentTarget)}>
-        <span>{projectName}</span>
-        <span className="select-chevron" aria-hidden="true" />
-      </button>
-    </section>
-  );
-}
-
-function ProjectSelectorPopover({
-  activeProjectId,
-  position,
-  projects,
-  onSelect,
-  onClose,
-  onAddProject
-}: {
-  activeProjectId?: string;
-  position?: { top: number; left: number };
-  projects: ProjectEntry[];
-  onSelect: (project: ProjectEntry) => void;
-  onClose: () => void;
-  onAddProject: () => void;
-}): React.ReactElement {
-  const rows = projectSelectorRows(projects, activeProjectId);
-  return (
-    <div className="project-selector-layer" onPointerDown={onClose}>
-      <div className="project-selector-popover" style={position} onPointerDown={(event) => event.stopPropagation()}>
-        <div className="project-selector-title">Select your project</div>
-        {rows.map((project) => (
-          <button className={project.active ? 'project-selector-row active' : 'project-selector-row'} type="button" key={project.id} onClick={() => onSelect(project)}>
-            <FolderIcon className="folder-icon" />
-            <strong>{project.name}</strong>
-            {project.active ? <span className="project-selector-check">✓</span> : null}
-          </button>
-        ))}
-        <div className="project-selector-divider" />
-        <button className="project-selector-row add" type="button" onClick={onAddProject}>
-          <FolderPlusIcon className="project-selector-add-icon" />
-          <strong>Add new project</strong>
-        </button>
-      </div>
-    </div>
-  );
 }
 
 function NewThreadIcon({ className }: { className?: string }): React.ReactElement {
@@ -1569,125 +2132,6 @@ function SettingsIcon({ className }: { className?: string }): React.ReactElement
       <path d="M12 15.5A3.5 3.5 0 1 0 12 8.5a3.5 3.5 0 0 0 0 7Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
       <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.65 1.65 0 0 0 15 19.4a1.65 1.65 0 0 0-1 .6 1.65 1.65 0 0 0-.4 1.08V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-.6-1 1.65 1.65 0 0 0-1.08-.4H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-.6A1.65 1.65 0 0 0 10.4 2.92V3a2 2 0 1 1 4 0v-.08A1.65 1.65 0 0 0 15 4.6a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9c.14.33.34.64.6 1 .3.37.69.6 1.08.6H21a2 2 0 1 1 0 4h-.09A1.65 1.65 0 0 0 19.4 15Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
-  );
-}
-
-function nodeText(node: React.ReactNode): string {
-  if (node === null || node === undefined || typeof node === 'boolean') return '';
-  if (typeof node === 'string' || typeof node === 'number') return String(node);
-  if (Array.isArray(node)) return node.map(nodeText).join('');
-  if (React.isValidElement<{ children?: React.ReactNode }>(node)) return nodeText(node.props.children);
-  return '';
-}
-
-async function copyText(text: string): Promise<void> {
-  if (navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(text);
-    return;
-  }
-
-  const textarea = document.createElement('textarea');
-  textarea.value = text;
-  textarea.setAttribute('readonly', 'true');
-  textarea.style.position = 'fixed';
-  textarea.style.opacity = '0';
-  document.body.appendChild(textarea);
-  textarea.select();
-  document.execCommand('copy');
-  textarea.remove();
-}
-
-function MarkdownCodeBlock({ children, ...props }: React.HTMLAttributes<HTMLPreElement>): React.ReactElement {
-  const [copied, setCopied] = useState(false);
-  const code = nodeText(children).replace(/\n$/, '');
-  const language = codeBlockLanguage(children);
-
-  async function handleCopy(): Promise<void> {
-    try {
-      await copyText(code);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1100);
-    } catch {
-      setCopied(false);
-    }
-  }
-
-  return (
-    <div className="markdown-code-block">
-      {language ? <div className="code-language-label">{language}</div> : null}
-      <button className="copy-code-button" type="button" onClick={handleCopy} aria-label="Copy code" title="Copy code">
-        {copied ? '✓' : <CopyIcon />}
-      </button>
-      <pre {...props}><code>{tokenizeCode(code).map((token, index) => <span className={`syntax-token ${token.kind}`} key={`${index}-${token.kind}`}>{token.text}</span>)}</code></pre>
-    </div>
-  );
-}
-
-function codeBlockLanguage(node: React.ReactNode): string | undefined {
-  const first = Array.isArray(node) ? node[0] : node;
-  if (!React.isValidElement<{ className?: string }>(first)) return undefined;
-  const match = /language-([^\s]+)/.exec(first.props.className ?? '');
-  return match?.[1];
-}
-
-function CopyIcon(): React.ReactElement {
-  return (
-    <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-      <path d="M5 2.5A1.5 1.5 0 0 1 6.5 1h6A1.5 1.5 0 0 1 14 2.5v6a1.5 1.5 0 0 1-1.5 1.5H11V8.5h1.5v-6h-6V4H5V2.5Z" />
-      <path d="M2 6.5A1.5 1.5 0 0 1 3.5 5h6A1.5 1.5 0 0 1 11 6.5v7A1.5 1.5 0 0 1 9.5 15h-6A1.5 1.5 0 0 1 2 13.5v-7Zm1.5 0v7h6v-7h-6Z" />
-    </svg>
-  );
-}
-
-const markdownComponents: Components = {
-  pre: MarkdownCodeBlock,
-  a: MarkdownLink
-};
-
-function MarkdownLink({ href, children, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement>): React.ReactElement {
-  function handleClick(event: React.MouseEvent<HTMLAnchorElement>): void {
-    if (!href) return;
-    event.preventDefault();
-    void window.codexDesktop.openExternalTarget({ target: href });
-  }
-
-  return <a {...props} href={href} onClick={handleClick}>{children}</a>;
-}
-
-function ActivityMessage({ text }: { text: string }): React.ReactElement {
-  return (
-    <details className="activity-block" open>
-      <summary>activity</summary>
-      <div className="activity-body">
-        {splitActivitySegments(text).map((segment, index) => segment.type === 'diff' ? (
-          <pre className="activity-diff" key={`${segment.type}-${index}`}>
-            {segment.text.split('\n').map((line, lineIndex) => (
-              <span className={diffLineClass(line)} key={`${lineIndex}-${line}`}>{line || ' '}</span>
-            ))}
-          </pre>
-        ) : isMarkdownActivityText(segment.text) ? (
-          <div className="activity-markdown" key={`${segment.type}-${index}`}>
-            <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>{segment.text}</ReactMarkdown>
-          </div>
-        ) : (
-          <pre className="activity-text" key={`${segment.type}-${index}`}>{segment.text}</pre>
-        ))}
-      </div>
-    </details>
-  );
-}
-
-function UserMessage({ text }: { text: string }): React.ReactElement {
-  return (
-    <>
-      <div className="user-message-body">
-        {splitUserMessageParts(normalizeTerminalText(text)).map((part, index) => part.type === 'image' ? (
-          <LocalImagePreview imagePath={part.path} name={part.name} key={`${part.path}-${index}`} />
-        ) : part.text.trim().length > 0 ? (
-          <pre key={`text-${index}`}>{part.text}</pre>
-        ) : null)}
-      </div>
-    </>
   );
 }
 
@@ -1767,7 +2211,7 @@ function BranchMenu({ info, onSwitch }: { info: GitBranchInfo; onSwitch: (branch
       ))}
       {branches.length === 0 ? <div className="branch-empty">No matching branches</div> : null}
       <div className="branch-divider" />
-      <button className="branch-create" type="button" disabled>＋ Create and checkout new branch...</button>
+      <button className="branch-create" type="button" disabled title="Branch creation is not implemented yet.">＋ Create and checkout new branch...</button>
     </div>
   );
 }
@@ -1786,62 +2230,11 @@ function ComposerAttachments({ attachments, onRemove }: { attachments: ComposerA
   );
 }
 
-function LocalImagePreview({ imagePath, name, compact = false }: { imagePath: string; name: string; compact?: boolean }): React.ReactElement {
-  const [source, setSource] = useState<string | undefined>();
-  const [failed, setFailed] = useState(false);
-  const [open, setOpen] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    setSource(undefined);
-    setFailed(false);
-    void window.codexDesktop.readLocalImage({ path: imagePath }).then((result) => {
-      if (cancelled) return;
-      if (result.dataUrl) {
-        setSource(result.dataUrl);
-        return;
-      }
-      setFailed(true);
-    }).catch(() => {
-      if (!cancelled) setFailed(true);
-    });
-    return () => { cancelled = true; };
-  }, [imagePath]);
-
-  return (
-    <figure className={compact ? 'composer-image-preview' : 'user-image-preview'}>
-      {source ? <button className="image-preview-button" type="button" onClick={() => setOpen(true)}><img src={source} alt={name} /></button> : <div className="image-preview-fallback">{failed ? 'Image expired' : 'Loading image...'}</div>}
-      {compact ? null : <figcaption>{name}</figcaption>}
-      {open && source ? (
-        <div className="image-lightbox" role="dialog" aria-modal="true" onClick={() => setOpen(false)}>
-          <button className="image-lightbox-close" type="button" onClick={() => setOpen(false)} aria-label="Close image preview">×</button>
-          <img src={source} alt={name} onClick={(event) => event.stopPropagation()} />
-        </div>
-      ) : null}
-    </figure>
-  );
+function RendererRoot(): React.ReactElement {
+  // This route is compiled out of production behavior and is never reachable
+  // through the application navigation.
+  if (import.meta.env.DEV && window.location.pathname === '/dev/nodes') return <DevNodeGallery />;
+  return <App />;
 }
 
-const Transcript = React.memo(function Transcript({ messages, isRunning }: { messages: SessionMessage[]; isRunning: boolean }): React.ReactElement {
-  const visibleMessages = useMemo(() => visibleTranscriptMessages(messages), [messages]);
-  return (
-    <section className="transcript">
-      {visibleMessages.map((message) => (
-        <TranscriptMessage message={message} key={message.id} />
-      ))}
-      {isRunning ? <div className="thinking">Thinking</div> : null}
-    </section>
-  );
-});
-
-const TranscriptMessage = React.memo(function TranscriptMessage({ message }: { message: SessionMessage }): React.ReactElement {
-  return (
-    <article className={`message ${message.role}`}>
-      {message.role === 'system' ? <ActivityMessage text={message.text} /> : null}
-      {message.role === 'user' ? <UserMessage text={message.text} /> : null}
-      {message.role === 'codex' ? <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>{normalizeTerminalText(message.text)}</ReactMarkdown> : null}
-    </article>
-  );
-});
-
-createRoot(document.getElementById('root')!).render(<React.StrictMode><App /></React.StrictMode>);
+createRoot(document.getElementById('root')!).render(<React.StrictMode><RendererRoot /></React.StrictMode>);

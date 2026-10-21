@@ -13,9 +13,16 @@ describe('buildMainWindowOptions', () => {
 });
 
 
-  it('uses a dark native title bar on Windows instead of the default white bar', () => {
+  it('matches the global top bar with the Windows window controls', () => {
     const options = buildMainWindowOptions('/tmp/preload.js', 'win32');
 
     expect(options.titleBarStyle).toBe('hidden');
-    expect(options.titleBarOverlay).toEqual({ color: '#111111', symbolColor: '#d8d8d8', height: 34 });
+    expect(options.titleBarOverlay).toEqual({ color: '#f3f3f3', symbolColor: '#46515d', height: 38 });
+  });
+
+  it('keeps the native macOS traffic-light group in the native toolbar', () => {
+    const options = buildMainWindowOptions('/tmp/preload.js', 'darwin');
+
+    expect(options.titleBarStyle).toBe('hiddenInset');
+    expect(options.trafficLightPosition).toEqual({ x: 16, y: 13 });
   });

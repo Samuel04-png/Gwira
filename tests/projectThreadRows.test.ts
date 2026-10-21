@@ -35,19 +35,18 @@ describe('project thread rows', () => {
     expect([...second].sort()).toEqual(['project-a', 'project-b']);
   });
 
-  it('shows a project-scoped new thread row for every expanded project', () => {
+  it('does not render a permanent new thread row for expanded projects', () => {
     const rows = getProjectThreadRows({
       projectId: 'project-b',
       activeProjectId: 'project-a',
       activeConversationId: undefined,
       activeSessionId: undefined,
-      hasDraftSession: false,
       expandedProjectIds: new Set(['project-a', 'project-b']),
       histories: [],
       sessions: []
     });
 
-    expect(rows).toEqual([{ kind: 'new-thread', projectId: 'project-b', active: false }]);
+    expect(rows).toEqual([]);
   });
 
   it('keeps known expanded projects while ensuring the fallback project is visible', () => {
@@ -62,33 +61,27 @@ describe('project thread rows', () => {
       activeProjectId: 'project-a',
       activeConversationId: 'shared-thread',
       activeSessionId: undefined,
-      hasDraftSession: true,
       expandedProjectIds: new Set(['project-a', 'project-b']),
       histories: [history('shared-thread', 'Other project duplicate id')],
       sessions: []
     });
 
-    expect(rows).toEqual([
-      { kind: 'new-thread', projectId: 'project-b', active: false },
-      { kind: 'history', projectId: 'project-b', history: history('shared-thread', 'Other project duplicate id'), active: false, running: false }
-    ]);
+    expect(rows).toEqual([{ kind: 'history', projectId: 'project-b', history: history('shared-thread', 'Other project duplicate id'), active: false, running: false }]);
   });
 
 
-  it('does not mark history rows active when a project new thread is selected', () => {
+  it('does not mark history rows active without an active conversation', () => {
     const rows = getProjectThreadRows({
       projectId: 'project-a',
       activeProjectId: 'project-a',
       activeConversationId: undefined,
       activeSessionId: undefined,
-      hasDraftSession: false,
       expandedProjectIds: new Set(['project-a']),
       histories: [history('thread-1', 'First thread'), history('thread-2', 'Second thread')],
       sessions: []
     });
 
     expect(rows).toEqual([
-      { kind: 'new-thread', projectId: 'project-a', active: true },
       { kind: 'history', projectId: 'project-a', history: history('thread-1', 'First thread'), active: false, running: false },
       { kind: 'history', projectId: 'project-a', history: history('thread-2', 'Second thread'), active: false, running: false }
     ]);
@@ -102,16 +95,12 @@ describe('project thread rows', () => {
       activeProjectId: 'project-a',
       activeConversationId: undefined,
       activeSessionId: 'session-1',
-      hasDraftSession: true,
       expandedProjectIds: new Set(['project-a']),
       histories: [],
       sessions: [runningSession]
     });
 
-    expect(rows).toEqual([
-      { kind: 'new-thread', projectId: 'project-a', active: false },
-      { kind: 'session', projectId: 'project-a', session: runningSession, title: 'Implement concurrent sessions', active: true, running: true }
-    ]);
+    expect(rows).toEqual([{ kind: 'session', projectId: 'project-a', session: runningSession, title: 'Implement concurrent sessions', active: true, running: true }]);
   });
 
   it('marks a history row as running when a cached session matches its conversation id', () => {
@@ -123,16 +112,12 @@ describe('project thread rows', () => {
       activeProjectId: 'project-a',
       activeConversationId: 'thread-1',
       activeSessionId: 'session-1',
-      hasDraftSession: true,
       expandedProjectIds: new Set(['project-a']),
       histories: [thread],
       sessions: [runningSession]
     });
 
-    expect(rows).toEqual([
-      { kind: 'new-thread', projectId: 'project-a', active: false },
-      { kind: 'history', projectId: 'project-a', history: thread, active: true, running: true }
-    ]);
+    expect(rows).toEqual([{ kind: 'history', projectId: 'project-a', history: thread, active: true, running: true }]);
   });
 
   it('does not duplicate a cached session that is already represented by history', () => {
@@ -143,12 +128,11 @@ describe('project thread rows', () => {
       activeProjectId: 'project-a',
       activeConversationId: undefined,
       activeSessionId: undefined,
-      hasDraftSession: false,
       expandedProjectIds: new Set(['project-a']),
       histories: [history('thread-1', 'Existing thread')],
       sessions: [runningSession]
     });
 
-    expect(rows.filter((row) => row.kind !== 'new-thread')).toHaveLength(1);
+    expect(rows).toHaveLength(1);
   });
 });

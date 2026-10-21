@@ -1,0 +1,116 @@
+/* Global application shell: one top bar, one sidebar, one page area. Loaded after styles.css so it owns the layout. */
+.shell {
+  --gw-topbar-height: 38px;
+  --gw-sidebar-width: 248px;
+  --gw-rail-width: 52px;
+  --gw-control-height: 26px;
+  --gw-radius: 6px;
+  --gw-focus: 2px solid var(--gw-accent-strong);
+  position: relative;
+  display: grid;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  overflow: hidden;
+  grid-template-columns: 324px minmax(0, 1fr);
+  grid-template-rows: var(--gw-topbar-height) minmax(0, 1fr);
+  color: var(--gw-text);
+  background: var(--gw-bg);
+}
+.shell[data-sidebar='collapsed'], .shell:has(.gwira-two-layer-sidebar.is-collapsed), .shell[data-narrow='true'] { grid-template-columns: 64px minmax(0, 1fr); }
+
+/* ---- Top bar ---------------------------------------------------------- */
+.global-topbar {
+  position: relative;
+  z-index: 60;
+  grid-column: 1 / -1;
+  grid-row: 1;
+  display: flex;
+  min-width: 0;
+  height: var(--gw-topbar-height);
+  align-items: stretch;
+  gap: 4px;
+  padding: 0 8px 0 var(--gw-traffic-inset, 78px);
+  border-bottom: 1px solid var(--gw-border);
+  background: var(--gw-sidebar);
+  -webkit-app-region: drag;
+  user-select: none;
+}
+html[data-platform='win32'] .global-topbar { --gw-traffic-inset: 8px; padding-right: 148px; }
+.global-topbar button { -webkit-app-region: no-drag; }
+.global-topbar__nav, .global-topbar__actions { display: flex; flex: 0 0 auto; align-items: center; gap: 2px; -webkit-app-region: no-drag; }
+.global-topbar__nav { margin-right: 4px; }
+.global-topbar__actions { margin-left: 4px; }
+.global-topbar__nav button, .global-topbar__actions button, .global-topbar__add {
+  position: relative;
+  display: inline-grid;
+  height: var(--gw-control-height);
+  min-width: var(--gw-control-height);
+  place-items: center;
+  padding: 0;
+  color: #5f6b78;
+  border-radius: var(--gw-radius);
+}
+.global-topbar .shell-icon { width: 16px; height: 16px; }
+.global-topbar button:hover:not(:disabled) { color: var(--gw-text); background: rgba(32, 35, 41, .07); }
+.global-topbar button:disabled { color: #b6bcc4; opacity: 1; }
+.global-topbar button:focus-visible { outline: var(--gw-focus); outline-offset: -2px; }
+.global-topbar__search { display: inline-flex !important; gap: 6px; padding: 0 8px !important; border: 1px solid var(--gw-border) !important; background: var(--gw-surface); font-size: 12px; }
+.global-topbar__search kbd { color: #8a94a0; font: inherit; font-size: 11px; }
+.global-topbar__badge { position: absolute; top: 4px; right: 5px; width: 6px; height: 6px; border-radius: 50%; background: var(--gw-status-danger); }
+
+.global-topbar__tabs { display: flex; flex: 1 1 0; min-width: 0; align-items: flex-end; gap: 2px; overflow: hidden; padding-top: 5px; }
+.global-tab { display: flex; flex: 0 1 168px; min-width: 56px; max-width: 200px; height: 100%; align-items: stretch; border: 1px solid transparent; border-bottom: 0; border-radius: var(--gw-radius) var(--gw-radius) 0 0; color: #5f6b78; -webkit-app-region: no-drag; }
+.global-tab:hover { background: rgba(32, 35, 41, .05); }
+.global-tab.is-active { position: relative; z-index: 1; margin-bottom: -1px; color: var(--gw-text); border-color: var(--gw-border); background: var(--gw-surface); }
+.global-tab__select { min-width: 0; flex: 1; overflow: hidden; padding: 0 4px 0 10px; font-size: 12px; font-weight: 520; text-align: left; text-overflow: ellipsis; white-space: nowrap; }
+.global-tab.is-active .global-tab__select { font-weight: 620; }
+.global-tab__close { width: 22px; color: #8a94a0; font-size: 15px; }
+.global-tab__close:hover { color: var(--gw-text); }
+.global-topbar__add { align-self: center; margin-left: 2px; }
+
+.global-popover { position: absolute; z-index: 80; top: calc(100% + 4px); left: 90px; display: grid; width: min(380px, calc(100vw - 24px)); gap: 8px; padding: 10px; color: var(--gw-text); border: 1px solid var(--gw-border); border-radius: 8px; background: var(--gw-surface); box-shadow: 0 6px 20px rgba(24, 33, 43, .1); -webkit-app-region: no-drag; }
+.global-popover.is-right { right: 8px; left: auto; }
+.global-popover label { display: grid; gap: 6px; color: var(--gw-text-muted); font-size: 11px; font-weight: 560; }
+.global-popover input { width: 100%; height: 32px; box-sizing: border-box; padding: 0 9px; color: var(--gw-text); border: 1px solid var(--gw-border); border-radius: var(--gw-radius); outline: 0; font: inherit; font-size: 13px; }
+.global-popover input:focus-visible { border-color: var(--gw-accent-strong); box-shadow: 0 0 0 2px var(--gw-accent); }
+.global-popover__choices { display: grid; max-height: 320px; overflow: auto; }
+.global-popover__choices button { display: grid; gap: 1px; padding: 7px 8px; text-align: left; border-radius: var(--gw-radius); }
+.global-popover__choices button:hover, .global-popover__choices button:focus-visible { background: var(--gw-surface-muted); outline: 0; }
+.global-popover__choices strong { overflow: hidden; font-size: 12.5px; font-weight: 580; text-overflow: ellipsis; white-space: nowrap; }
+.global-popover__choices span { color: var(--gw-text-muted); font-size: 11px; }
+.global-popover p { margin: 0; color: var(--gw-text-muted); font-size: 12px; line-height: 1.45; }
+.global-popover__hint { padding-top: 6px; border-top: 1px solid var(--gw-border); font-size: 11px !important; }
+.global-popover--notifications > button { justify-self: start; height: 28px; padding: 0 10px; border: 1px solid var(--gw-border); border-radius: var(--gw-radius); font-size: 12px; }
+.global-popover--notifications > button:hover { background: var(--gw-surface-muted); }
+
+/* ---- Sidebar: the original two-layer design (icon rail + compact panel); layout comes from styles.css. ---- */
+.gwira-two-layer-sidebar { position: relative; grid-column: 1; grid-row: 2; z-index: 40; min-width: 0; min-height: 0; overflow: visible; }
+.gwira-two-layer-sidebar .gwira-primary-rail { padding: 14px 8px 12px; }
+.gwira-two-layer-sidebar .gwira-secondary-sidebar { min-height: 0; overflow: hidden; }
+/* Home keeps the original Codex-style panel; the global top bar now owns the traffic-light area. */
+.is-home-sidebar .gwira-secondary-sidebar .traffic-spacer { height: 4px; }
+.is-home-sidebar .gwira-secondary-sidebar { overflow-y: auto; }
+/* Business keeps the compact dashboard panel; its own CSS lives under .dashboard-sidebar. */
+.is-business-sidebar .gwira-secondary-sidebar { padding: 0; }
+.gwira-two-layer-sidebar .dashboard-sidebar { height: 100%; min-height: 0; }
+.gwira-two-layer-sidebar .dashboard-sidebar__scroll { overflow: hidden auto; }
+.gwira-two-layer-sidebar .gwira-more-menu { top: 14px; left: 62px; right: auto; z-index: 60; }
+.gwira-two-layer-sidebar .gwira-more-menu button.active { background: rgba(101, 215, 231, .18); }
+.gwira-two-layer-sidebar.is-overlay .gwira-secondary-sidebar { position: absolute; top: 0; bottom: 0; left: 64px; z-index: 55; width: 260px; border-right: 1px solid var(--gw-border); box-shadow: 0 8px 24px rgba(24, 33, 43, .12); }
+.gwira-two-layer-sidebar.is-overlay .gwira-secondary-sidebar[hidden] { display: none; }
+
+/* ---- Page area -------------------------------------------------------- */
+.workspace { position: relative; grid-column: 2; grid-row: 2; display: grid; min-width: 0; min-height: 0; grid-template-rows: minmax(0, 1fr); overflow: hidden; border: 0; color: var(--gw-text); background: var(--gw-surface); }
+.workspace__route { position: absolute; inset: 0; background: var(--gw-bg); display: grid; grid-template-rows: minmax(0, 1fr); min-width: 0; min-height: 0; }
+.global-error-banner { z-index: 70; }
+
+/* Task detail is a docked panel within the page area; it never covers the top bar. */
+.gwira-task-details { position: absolute; z-index: 20; top: 0; right: 0; bottom: 0; width: min(400px, 100%); max-height: none; box-sizing: border-box; border-width: 0 0 0 1px; border-radius: 0; box-shadow: none; }
+
+@media (max-width: 899px) {
+  .global-topbar__search span, .global-topbar__search kbd { display: none; }
+  .global-topbar__search { padding: 0 !important; width: var(--gw-control-height); }
+}
