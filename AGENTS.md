@@ -1,3 +1,7 @@
+## START HERE
+
+Before any task, read [docs/gwira/CODEX_HANDOFF.md](docs/gwira/CODEX_HANDOFF.md). It explains what Gwira is, what has been built, the hard safety rules (Apply disabled, no Supabase, two sidebars, no invented data, work only in this worktree), how we work on each task, and which documents to read for full context.
+
 ## UI work standards (apply to every UI task)
 
 ### Before you write code
