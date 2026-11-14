@@ -1,0 +1,14 @@
+.gw-mentions { display: flex; flex-direction: column; min-width: 0; height: 100%; background: var(--gw-bg); color: var(--gw-text); }
+.gw-mentions__header { padding: var(--gw-space-5) var(--gw-space-6) var(--gw-space-2); }
+.gw-mentions h2 { margin: 0; font-size: var(--gw-type-page); line-height: var(--gw-leading-page); font-weight: var(--gw-weight-semibold); letter-spacing: var(--gw-tracking-heading); outline: none; }
+.gw-mentions__summary { margin: var(--gw-optical-offset) 0 0; font-size: var(--gw-type-meta); color: var(--gw-text-muted); }
+.gw-mentions__filters { display: flex; gap: var(--gw-space-1); padding: var(--gw-space-1) var(--gw-space-6) var(--gw-space-3); border-bottom: 1px solid var(--gw-border); }
+.gw-mentions__filters button { display: inline-flex; align-items: center; gap: var(--gw-space-2); height: 26px; padding: 0 var(--gw-space-3); border: 0; border-radius: var(--gw-radius-lg); background: transparent; color: var(--gw-text-muted); font: inherit; font-size: var(--gw-type-meta); cursor: pointer; white-space: nowrap; }
+.gw-mentions__filters button:hover { background: var(--gw-selected); }
+.gw-mentions__filters button[aria-pressed='true'] { background: var(--gw-selected); color: var(--gw-text); font-weight: var(--gw-weight-medium); }
+.gw-mentions__filters button:focus-visible { outline: var(--gw-focus); outline-offset: 1px; }
+.gw-mentions__count { font-size: var(--gw-type-meta); color: var(--gw-accent-strong); font-variant-numeric: tabular-nums; }
+.gw-mentions__error { min-width: 0; margin: var(--gw-space-2) var(--gw-space-6) 0; padding: var(--gw-space-2) var(--gw-space-3); border: 1px solid color-mix(in srgb, var(--gw-status-danger) 24%, var(--gw-border)); border-radius: var(--gw-radius-md); color: var(--gw-status-danger); background: var(--gw-status-danger-bg); font-size: var(--gw-type-body); line-height: var(--gw-leading-body); overflow-wrap: anywhere; }
+.gw-mentions__scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 0 var(--gw-space-3) var(--gw-space-10); }
+.gw-mentions__scroll .gw-inbox-list { max-width: 920px; }
+@media (prefers-reduced-motion: reduce) { .gw-mentions * { transition: none !important; } }

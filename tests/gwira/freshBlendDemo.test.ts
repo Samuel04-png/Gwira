@@ -14,6 +14,6 @@ describe('FreshBlend development demo', () => {
 
   it('keeps the simulated purchase gated by an approval', () => {
     const graph = buildGraph(freshBlendDemo('morning').records);
-    expect(graph.edges).toContainEqual(expect.objectContaining({ type: 'handoff', source: 'step:recommend', target: 'step:approve' }));
+    expect(graph.edges).toContainEqual(expect.objectContaining({ type: 'gates', source: 'approval:mango-approval', target: 'humanWork:approve' }));
   });
 });

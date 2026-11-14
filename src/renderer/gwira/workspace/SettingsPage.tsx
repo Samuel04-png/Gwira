@@ -1,21 +1,38 @@
-import React, { useEffect, useState } from 'react';
-import type { GwiraLocalState } from '../domain/types.js';
-
-export interface SettingsPageProps {
-  state: GwiraLocalState;
-  onRenameWorkspace: (name: string) => void;
+import React,{useEffect,useState} from 'react';
+import {SettingsPageShell,SettingsSection,SettingsRow,SettingsInput,SettingsSelect,SettingsButton,SettingsNotice,SettingsStatus,SettingsDivider} from '../../components/settings/Settings.js';
+import {Icon} from '../../components/Icon.js';
+import type {GwiraLocalState} from '../domain/types.js';
+export interface SettingsPageProps {state:GwiraLocalState;onRenameWorkspace:(name:string)=>void|Promise<void>;}
+export const settingsCategories=[{id:'workspace',label:'Workspace'},{id:'appearance',label:'Appearance'},{id:'account',label:'Account'},{id:'security',label:'Security and permissions'}] as const;
+export function AuthenticatedSettingsPage({workspace}:{workspace:string}):React.ReactElement {
+ const [section,setSection]=useState('workspace');
+ return <SettingsPageShell title="Settings" description="Manage your workspace and preferences." categories={settingsCategories} selected={section} onSelect={setSection}>
+  {section==='workspace'?<SettingsSection title="Workspace" description="Your current authenticated workspace."><SettingsRow title="Workspace name" description={workspace}/><SettingsNotice>Workspace editing is unavailable here.</SettingsNotice></SettingsSection>
+   :section==='appearance'?<SettingsSection title="Appearance"><SettingsNotice>Appearance settings are unavailable for authenticated workspaces.</SettingsNotice></SettingsSection>
+   :section==='account'?<SettingsSection title="Account"><SettingsNotice>Use the account menu to switch workspaces or sign out.</SettingsNotice></SettingsSection>
+   :<SettingsSection title="Security and permissions"><SettingsRow title="Local machine access" description="Unrestricted files, terminal execution and local scheduling are unavailable."><SettingsStatus>Unavailable</SettingsStatus></SettingsRow><SettingsNotice>Account and organization access is verified by the authenticated services.</SettingsNotice></SettingsSection>}
+ </SettingsPageShell>;
 }
+/** Only implemented local configuration is editable. No server authority is implied. */
+export function SettingsPage({state,onRenameWorkspace}:SettingsPageProps):React.ReactElement{
+ const [section,setSection]=useState('workspace'),[name,setName]=useState(state.workspace.name),[saved,setSaved]=useState(''),[error,setError]=useState(''),[busy,setBusy]=useState(false),[touched,setTouched]=useState(false),[theme,setTheme]=useState(()=>document.documentElement.dataset.theme==='dark'?'dark':'light');
+ useEffect(()=>setName(state.workspace.name),[state.workspace.name]);
+ const validation=!name.trim()?'Enter a workspace name.':name.trim().length>160?'Use 160 characters or fewer.':'';
+ const dirty=name.trim()!==state.workspace.name;
+ async function save(event:React.FormEvent):Promise<void>{event.preventDefault();setTouched(true);if(validation||!dirty||busy)return;setBusy(true);setError('');setSaved('');try{await onRenameWorkspace(name.trim());setSaved('Workspace name saved.');}catch{setError('The workspace name could not be saved. Your draft is kept here. Check device storage and retry.');}finally{setBusy(false);}}
+ function changeTheme(value:string):void{setError('');setSaved('');try{localStorage.setItem('gwira.desktop.theme',value);document.documentElement.dataset.theme=value;setTheme(value);setSaved('Appearance saved.');}catch{setError('Appearance could not be saved. Check device storage and choose the theme again.');}}
+ async function returnToSignIn():Promise<void>{if(busy)return;setBusy(true);setError('');try{const result=await window.codexDesktop.account.command({type:'sign_out'});if(result.phase!=='signed_out')setError(result.error||'Could not return to sign in. Try again.');}catch{setError('Could not return to sign in. Restart Gwira and try again.');}finally{setBusy(false);}}
+ const terminalAvailable=typeof window.codexDesktop?.terminal?.start==='function';
+ return <SettingsPageShell title="Settings" description="Manage your workspace and preferences." categories={settingsCategories} selected={section} onSelect={id=>{setSection(id);setSaved('');setError('');}}>
+ {section==='workspace'?<SettingsSection title="Workspace" description="Manage your workspace identity."><form noValidate onSubmit={event=>void save(event)}><SettingsRow title="Workspace name" description="The name displayed throughout Gwira."><SettingsInput label="Workspace name" aria-describedby="workspace-save-feedback" required value={name} disabled={busy} error={touched?validation:undefined} onBlur={()=>setTouched(true)} onChange={event=>{setName(event.target.value);setSaved('');setError('');}}/></SettingsRow><SettingsDivider/><div className="settings-save"><SettingsButton variant="primary" type="submit" disabled={!dirty||!!validation} loading={busy}>{busy?'Saving…':'Save changes'}</SettingsButton></div><div className="settings-feedback" id="workspace-save-feedback">{error?<SettingsNotice tone="error">{error}</SettingsNotice>:<span role="status">{saved||(dirty?'Unsaved changes':'')}</span>}</div></form></SettingsSection>
+ :section==='appearance'?<SettingsSection title="Appearance" description="Customize how Gwira looks on your device."><SettingsRow title="Theme" description="Choose your preferred appearance."><SettingsSelect label="Color theme" value={theme} options={[{value:'light',label:'Light'},{value:'dark',label:'Dark'}]} onChange={changeTheme}/></SettingsRow><div className="settings-feedback">{error?<SettingsNotice tone="error">{error}</SettingsNotice>:<span role="status">{saved}</span>}</div></SettingsSection>
+ :section==='account'?<SettingsSection title="Account" description="Manage your account connection and local account information."><SettingsRow title="Account connection" description="No account is currently connected."><SettingsButton loading={busy} onClick={()=>void returnToSignIn()}>{busy?'Opening sign in…':'Return to sign in'}</SettingsButton></SettingsRow><SettingsNotice>Workspace records stay on this device. This is local mode. Sign in separately to manage a cloud account without uploading these records.</SettingsNotice>{error?<SettingsNotice tone="error">{error}</SettingsNotice>:null}</SettingsSection>
+ :<>
+ <SettingsSection title="File access"><SettingsRow title="Selected folders" description="Read selected folders in this app window."><SettingsStatus>Read only</SettingsStatus></SettingsRow><details className="settings-details"><summary><Icon name="chevron-down"/>Folder access details</summary><p>Access stays within the selected folder. Organization documents are managed separately.</p></details></SettingsSection>
+ <SettingsSection title="Terminal access"><SettingsRow title="Interactive terminal" description={terminalAvailable?'Shell start and restart require confirmation.':'The desktop terminal service is unavailable here.'}><SettingsStatus>{terminalAvailable?'Service connected':'Unavailable'}</SettingsStatus></SettingsRow><SettingsNotice tone="warning">Commands run with your user permissions, outside file preview restrictions.</SettingsNotice></SettingsSection>
+ <SettingsSection title="Agent permissions"><SettingsRow title="Coding-agent tasks" description="Existing permissions and review still apply."><SettingsStatus>Existing permissions</SettingsStatus></SettingsRow><details className="settings-details"><summary><Icon name="chevron-down"/>Execution permissions</summary><p>Settings grants no additional execution or shell access to agents.</p></details></SettingsSection>
+ <SettingsSection title="Data and storage"><SettingsRow title="Local workspace" description="Saved on this device. No server sync."><SettingsStatus>Local storage</SettingsStatus></SettingsRow><details className="settings-details"><summary><Icon name="chevron-down"/>Schedule storage details</summary><p>Schedule triggers run while Gwira is open and create occurrences for review.</p></details></SettingsSection>
+ </>}
 
-/** The only settings control exposed here is backed by the local state reducer. */
-export function SettingsPage({ state, onRenameWorkspace }: SettingsPageProps): React.ReactElement {
-  const [name, setName] = useState(state.workspace.name);
-  useEffect(() => setName(state.workspace.name), [state.workspace.name]);
-  return <section className="gwira-workspace-page" aria-label="Settings">
-    <header className="gwira-workspace-page__header"><div><h1>Settings</h1><p>Local workspace settings only.</p></div></header>
-    <form className="gwira-workspace-form" onSubmit={(event) => { event.preventDefault(); if (name.trim()) onRenameWorkspace(name.trim()); }}>
-      <label>Workspace name<input required value={name} onChange={(event) => setName(event.target.value)} /></label>
-      <button type="submit" disabled={!name.trim() || name.trim() === state.workspace.name}>Save workspace name</button>
-    </form>
-    <p className="gwira-workspace-page__notice">This local prototype stores workspace records on this device. It does not sync to a server, invite users, or change Codex CLI permissions.</p>
-  </section>;
+ </SettingsPageShell>;
 }

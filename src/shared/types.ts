@@ -197,6 +197,16 @@ export interface SwitchGitBranchRequest {
 }
 
 export interface CodexDesktopApi {
+  account: import('./accountAuth.js').AccountApi;
+  conversations: import('./cloudConversations.js').CloudConversationsApi;
+  notifications: import('./cloudNotifications.js').CloudNotificationsApi;
+  approvals: import('./cloudApprovals.js').CloudApprovalsApi;
+  directory: import('./cloudDirectory.js').CloudDirectoryApi;
+  channels: import('./cloudChannels.js').CloudChannelsApi;
+  scopedPreferences: import('./scopedPreferences.js').ScopedPreferencesApi;
+  workspaceFiles: import('./workspaceFiles.js').WorkspaceFilesApi;
+  schedules: import('./schedules.js').SchedulesApi;
+  terminal: import('./terminal.js').TerminalApi;
   startSession(request: StartSessionRequest): Promise<CodexSession>;
   sendInput(request: SendInputRequest): Promise<void>;
   stopSession(request: StopSessionRequest): Promise<void>;

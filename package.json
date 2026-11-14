@@ -2,12 +2,14 @@
   "name": "codex-desktop",
   "version": "0.1.0",
   "private": true,
-  "description": "Desktop visual client for a locally installed Codex CLI.",
+  "description": "Gwira desktop workspace for people and AI workers.",
   "author": "MangoWork",
   "main": "dist/main/main.js",
   "type": "module",
   "scripts": {
-    "dev": "node scripts/dev.mjs",
+    "dev": "npm run dev:local",
+    "dev:hosted": "node scripts/dev.mjs",
+    "dev:local": "node scripts/local-supabase-env.mjs && GWIRA_AUTH_PROFILE=local-dev GWIRA_DEV_PREVIEW=true node scripts/dev.mjs",
     "build": "tsc -p tsconfig.electron.json && tsc -p tsconfig.renderer.json --noEmit && vite build",
     "package": "npm run build && node scripts/package.mjs",
     "package:mac": "npm run build && node scripts/package.mjs --platform=mac",
@@ -15,18 +17,32 @@
     "typecheck": "tsc -p tsconfig.electron.json --noEmit && tsc -p tsconfig.renderer.json --noEmit && tsc -p tsconfig.test.json --noEmit",
     "test": "vitest run --config vitest.config.ts",
     "test:electron-smoke": "npm run build && node scripts/electron-smoke.mjs",
+    "capture:workflow:f1": "node scripts/capture-workflow-f1.mjs",
+    "capture:dashboard:f2": "node scripts/capture-workflow-f1.mjs --suite=f2",
+    "capture:workspace:f3": "node scripts/capture-workflow-f1.mjs --suite=f3",
+    "capture:shell": "node scripts/capture-workflow-f1.mjs --suite=shell",
+    "capture:timeline": "node scripts/capture-workflow-f1.mjs --suite=timeline",
     "test:electron-history": "npm run build && node scripts/electron-history-benchmark.mjs",
     "test:electron-agent-lifecycle": "npm run build && node scripts/electron-agent-lifecycle.mjs",
     "start": "electron ."
   },
   "dependencies": {
+    "@phosphor-icons/react": "2.1.10",
+    "@supabase/supabase-js": "^2.119.0",
     "@vitejs/plugin-react": "latest",
+    "@xterm/addon-fit": "0.11.0",
+    "@xterm/xterm": "6.0.0",
     "@xyflow/react": "^12.12.0",
     "dagre": "^0.8.5",
+    "lucide-react": "1.61.0",
+    "mammoth": "1.13.0",
+    "node-pty": "1.1.0",
+    "pdfjs-dist": "6.4.299",
     "react": "latest",
     "react-dom": "latest",
     "react-markdown": "^10.1.0",
-    "remark-gfm": "^4.0.1"
+    "remark-gfm": "^4.0.1",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
   "devDependencies": {
     "@types/dagre": "^0.7.54",
@@ -42,6 +58,7 @@
     "wait-on": "latest"
   },
   "overrides": {
-    "yauzl": "^3.3.1"
+    "yauzl": "^3.3.1",
+    "@xmldom/xmldom": "0.8.15"
   }
 }

@@ -45,6 +45,14 @@ export class SessionStore {
     return session ? structuredClone(session) : undefined;
   }
 
+  clear(): void {
+    this.sessions.clear();
+  }
+
+  remove(sessionId: string): void {
+    this.sessions.delete(sessionId);
+  }
+
   updateStatus(sessionId: string, status: SessionStatus, error?: string): CodexSession {
     const session = this.requireSession(sessionId);
     session.status = status;

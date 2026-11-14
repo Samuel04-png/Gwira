@@ -18,9 +18,22 @@ const doats = [
 ];
 
 export function freshBlendDemo(scenario: FreshBlendScenario): FreshBlendDemo {
-  if (scenario === 'marketing') return marketing();
-  if (scenario === 'recovery') return recovery();
-  return morning();
+  const demo = scenario === 'marketing' ? marketing() : scenario === 'recovery' ? recovery() : morning();
+  return {
+    ...demo,
+    records: {
+      ...demo.records,
+      tasks: demo.records.tasks?.map((task) => ({
+        ...task,
+        ownerKind: task.humanWorkId ? 'person' : task.doatRunId ? 'doat' : 'unassigned',
+        ownerName: task.subtitle?.split('·')[0]?.trim() || 'Unassigned'
+      })),
+      approvals: demo.records.approvals?.map((approval) => ({
+        ...approval,
+        reviewerName: approval.subtitle?.split('·')[0]?.trim()
+      }))
+    }
+  };
 }
 
 function morning(): FreshBlendDemo { return { label: 'Morning Operations', records: {
@@ -29,7 +42,7 @@ function morning(): FreshBlendDemo { return { label: 'Morning Operations', recor
     { id: 'count', title: 'Check mango inventory', subtitle: 'David Tembo · completed 9:15 AM', status: 'completed', humanWorkId: 'david-count', resultId: 'count-result' },
     { id: 'analysis', title: 'Evaluate ingredient shortage', subtitle: 'Inventory Doat · completed 9:18 AM', status: 'completed', dependsOnTaskIds: ['count'], doatRunId: 'inventory-analysis', resultId: 'shortage-result' },
     { id: 'recommend', title: 'Draft mango restocking recommendation', subtitle: 'Inventory Doat · K850 proposed expense', status: 'completed', dependsOnTaskIds: ['analysis'], doatRunId: 'inventory-recommend', resultId: 'recommendation' },
-    { id: 'approve', title: 'Proceed with mango purchase', subtitle: 'Sarah Mwila · simulated purchase only', status: 'waiting', dependsOnTaskIds: ['recommend'], approvalId: 'mango-approval' },
+    { id: 'approve', title: 'Proceed with mango purchase', subtitle: 'Sarah Mwila · simulated purchase only', status: 'waiting', dependsOnTaskIds: ['recommend'], humanWorkId: 'sarah-approval', approvalId: 'mango-approval' },
     { id: 'production', title: 'Prepare production equipment', subtitle: 'Brian Phiri · updated 9:31 AM', status: 'working', humanWorkId: 'brian-production' },
     { id: 'orders', title: 'Review morning customer orders', subtitle: 'Grace Banda · working', status: 'working', humanWorkId: 'grace-orders' },
     { id: 'updates', title: 'Prepare customer collection updates', subtitle: 'Customer Support Doat · working', status: 'working', dependsOnTaskIds: ['orders'], doatRunId: 'support-updates' },

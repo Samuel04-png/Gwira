@@ -1,0 +1,43 @@
+.gw-saved { position: relative; display: flex; flex-direction: column; min-width: 0; height: 100%; background: var(--gw-bg); color: var(--gw-text); }
+.gw-saved__header { padding: var(--gw-space-5) var(--gw-space-6) var(--gw-space-2); }
+.gw-saved h2 { margin: 0; font-size: var(--gw-type-page); line-height: var(--gw-leading-page); font-weight: var(--gw-weight-semibold); letter-spacing: var(--gw-tracking-heading); outline: none; }
+.gw-saved__summary { margin: var(--gw-optical-offset) 0 0; font-size: var(--gw-type-meta); color: var(--gw-text-muted); }
+.gw-saved__modes { display: flex; gap: var(--gw-space-1); padding: var(--gw-space-1) var(--gw-space-6) var(--gw-space-3); border-bottom: 1px solid var(--gw-border); }
+.gw-saved__modes button { display: inline-flex; align-items: center; height: 26px; padding: 0 var(--gw-space-3); border: 0; border-radius: var(--gw-radius-lg); background: transparent; color: var(--gw-text-muted); font: inherit; font-size: var(--gw-type-meta); cursor: pointer; white-space: nowrap; }
+.gw-saved__modes button:hover { background: var(--gw-selected); }
+.gw-saved__modes button[aria-pressed='true'] { background: var(--gw-selected); color: var(--gw-text); font-weight: var(--gw-weight-medium); }
+.gw-saved button:focus-visible, .gw-saved h2:focus-visible { outline: var(--gw-focus); outline-offset: 1px; }
+.gw-saved__error { min-width: 0; margin: var(--gw-space-2) var(--gw-space-6) 0; padding: var(--gw-space-2) var(--gw-space-3); border: 1px solid color-mix(in srgb, var(--gw-status-danger) 24%, var(--gw-border)); border-radius: var(--gw-radius-md); color: var(--gw-status-danger); background: var(--gw-status-danger-bg); font-size: var(--gw-type-body); line-height: var(--gw-leading-body); overflow-wrap: anywhere; }
+.gw-saved__scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 0 var(--gw-space-3) var(--gw-space-14); }
+.gw-saved__scroll .gw-inbox-list { max-width: 920px; }
+
+/* Saved items are for rereading: three preview lines and room for record chips. */
+.gw-inbox-row.is-compact.is-saved { padding-top: var(--gw-space-2); padding-bottom: var(--gw-space-2); align-items: flex-start; }
+.gw-inbox-row.is-compact.is-saved .gw-inbox-row__preview { -webkit-line-clamp: 3; }
+.gw-inbox-row.is-compact.is-saved .gw-inbox-row__avatar { margin-top: var(--gw-optical-offset); }
+.gw-inbox-row.is-compact.is-saved .gw-inbox-row__titleline time { white-space: nowrap; }
+.gw-saved__place { color: var(--gw-text-muted); font-weight: var(--gw-weight-regular); }
+.gw-saved__place.is-unavailable { font-style: italic; }
+.gw-inbox-row.is-saved.is-unavailable { cursor: default; }
+.gw-inbox-row.is-saved.is-unavailable .gw-inbox-row__preview { color: var(--gw-text-muted); }
+
+.gw-saved-chips { display: flex; flex-wrap: wrap; gap: var(--gw-space-2); }
+.gw-saved-chip { display: inline-flex; align-items: center; gap: var(--gw-space-1); min-width: 0; max-width: 100%; height: var(--gw-space-6); padding: 0 var(--gw-space-2); border: 1px solid var(--gw-border); border-radius: var(--gw-radius-sm); background: var(--gw-surface); color: var(--gw-text-secondary-strong); font-size: var(--gw-type-meta); line-height: var(--gw-leading-meta); }
+.gw-saved-chip.is-unavailable { font-style: italic; padding-left: var(--gw-space-2); }
+.gw-saved-chip__status { flex: none; white-space: nowrap; }
+.gw-saved-chip__label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gw-saved-chip__glyph { flex: none; width: 10px; height: 10px; border-radius: var(--gw-radius-round); border: 1.5px solid var(--gw-text-muted); box-sizing: border-box; }
+.gw-saved-chip__glyph[data-status='in_progress'] { border-color: var(--gw-highlight); background: var(--gw-surface-muted); }
+.gw-saved-chip__glyph[data-status='in_review'] { border-color: var(--gw-status-warning); background: var(--gw-status-warning); }
+.gw-saved-chip__glyph[data-status='done'] { border-color: var(--gw-accent-strong); background: var(--gw-accent-strong); }
+.gw-saved-chip__glyph[data-status='blocked'] { border-color: var(--gw-status-danger); background: var(--gw-status-danger); }
+
+.gw-saved__toast { position: absolute; left: 50%; bottom: var(--gw-space-4); transform: translateX(-50%); display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: minmax(0, 1fr); align-items: center; gap: var(--gw-space-3); width: max-content; min-width: 0; max-width: calc(100% - var(--gw-space-8)); max-height: min(320px, calc(100% - var(--gw-space-8))); padding: var(--gw-space-2) var(--gw-space-3); border: 1px solid var(--gw-action-bg); border-radius: var(--gw-radius-lg); background: var(--gw-action-bg); color: var(--gw-action-fg); font-size: var(--gw-type-body); line-height: var(--gw-leading-body); box-shadow: var(--gw-shadow-overlay); animation: none; }
+.gw-saved__toast > span { min-width: 0; min-height: 0; max-height: 100%; overflow: auto; overscroll-behavior: contain; white-space: normal; overflow-wrap: anywhere; }
+.gw-saved__toast button { align-self: center; min-width: var(--gw-control-default); min-height: var(--gw-control-default); padding: var(--gw-space-1) var(--gw-space-2); border: 1px solid color-mix(in srgb, var(--gw-action-fg) 40%, var(--gw-action-bg)); border-radius: var(--gw-radius-md); background: var(--gw-action-bg); color: var(--gw-action-fg); font: inherit; font-size: var(--gw-type-body); line-height: var(--gw-leading-body); font-weight: var(--gw-weight-medium); cursor: pointer; transition: background-color var(--gw-motion-fast) var(--gw-ease-out); }
+.gw-saved__toast button:hover { background: var(--gw-action-hover); }
+.gw-saved__toast button:active:not(:disabled) { background: color-mix(in srgb, var(--gw-action-fg) 14%, var(--gw-action-bg)); transform: none; }
+.gw-saved__toast button:focus-visible:not(:disabled) { outline: 2px solid var(--gw-action-fg); outline-offset: -2px; }
+@media (prefers-reduced-motion: reduce) { .gw-saved__toast button { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .gw-saved * { transition: none !important; } }
+@media (max-width: 760px) { .gw-saved__header { padding: var(--gw-space-4) var(--gw-space-4) var(--gw-space-2); } .gw-saved__modes { padding: var(--gw-space-1) var(--gw-space-4) var(--gw-space-2); } }

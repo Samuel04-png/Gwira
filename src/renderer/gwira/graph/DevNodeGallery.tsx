@@ -1,3 +1,4 @@
+import { Icon } from "../../components/Icon.js";
 import React, { useState } from 'react';
 import { DoatAvatar } from '../doats/ui/DoatAvatar.js';
 import type { DoatOperationalStatus } from '../doats/ui/types.js';
@@ -10,14 +11,14 @@ const states: ReadonlyArray<{ state: StepState; meta: string }> = [
 ];
 const doatAvatar = { seed: 'marketing-gallery', shape: 'prism' as const, primaryColor: '#75899b', secondaryColor: '#b7c5c8', expression: 'focused' as const, accessory: 'none' as const };
 const doatStatus: Record<StepState, DoatOperationalStatus> = { done: 'completed', working: 'working', waiting: 'waiting_approval', pending: 'idle', blocked: 'blocked', failed: 'failed', paused: 'paused' };
-function Glyph({ state }: { state: StepState }): React.ReactElement { return <span className={`gwira-step-node__glyph is-${state}`} aria-label={state} />; }
+function Glyph({ state }: { state: StepState }): React.ReactElement { return <span className={`gwira-step-node__glyph is-${state}`} aria-label={state}><Icon name={state === 'done' ? 'review' : state === 'working' ? 'running' : state === 'waiting' ? 'waiting' : state === 'failed' ? 'failed' : state === 'blocked' ? 'blocked' : state === 'paused' ? 'paused' : 'pending'} /></span>; }
 function Mark({ kind, state }: { kind: OwnerKind; state: StepState }): React.ReactElement { return kind === 'person' ? <span className="gwira-step-node__person-mark" aria-label="Chipo Zulu">CZ</span> : <span className="gwira-step-node__doat-mark"><DoatAvatar spec={doatAvatar} status={doatStatus[state]} size={28} label="Marketing Doat" /></span>; }
 export function StepNode({ state, owner = 'doat', color = 'coral', approval = false, innerSteps, title = 'Draft promotion content', display = 'full', appearance }: { state: StepState; owner?: OwnerKind; color?: OwnerColor; approval?: boolean; innerSteps?: number; title?: string; display?: 'full' | 'compact' | 'dot'; appearance?: 'hover' | 'selected' | 'dimmed' | 'focus' }): React.ReactElement {
   if (display === 'dot') return <div className={`gwira-step-node-dot is-${state} ${appearance ? `is-${appearance}` : ''}`} aria-label={`${owner} step, ${state}`}><Mark kind={owner} state={state} /><Glyph state={state} /></div>;
   if (display === 'compact') return <div className={`gwira-step-node gwira-step-node--compact is-${state} ${appearance ? `is-${appearance}` : ''}`} aria-label={`${title}. ${state}.`}><Mark kind={owner} state={state} /><strong>{title}</strong><Glyph state={state} /></div>;
   const baseMeta = states.find((item) => item.state === state)?.meta ?? '';
   const meta = approval ? 'Sarah Mwila · Waiting 14m' : owner === 'person' ? baseMeta.replace('Marketing Doat', 'Chipo Zulu') : baseMeta;
-  return <div style={{ '--h': `var(--gw-owner-${color})` } as React.CSSProperties} className={`gwira-step-node is-${state} ${appearance ? `is-${appearance}` : ''}`} tabIndex={appearance === 'focus' ? 0 : undefined} aria-label={`${approval ? 'Approval. ' : ''}${title}. ${meta}.`}><span className="gwira-step-node__handle is-in" /><span className="gwira-step-node__handle is-out" /><Mark kind={owner} state={state} /><span className="gwira-step-node__body">{approval ? <small>Approval</small> : null}<strong title={title}>{title}</strong><span>{meta}</span>{innerSteps ? <em><i aria-hidden="true">▱</i> {innerSteps} steps</em> : null}</span><Glyph state={state} /></div>;
+  return <div style={{ '--h': `var(--gw-owner-${color})` } as React.CSSProperties} className={`gwira-step-node is-${state} ${appearance ? `is-${appearance}` : ''}`} tabIndex={appearance === 'focus' ? 0 : undefined} aria-label={`${approval ? 'Approval. ' : ''}${title}. ${meta}.`}><span className="gwira-step-node__handle is-in" /><span className="gwira-step-node__handle is-out" /><Mark kind={owner} state={state} /><span className="gwira-step-node__body">{approval ? <small>Approval</small> : null}<strong title={title}>{title}</strong><span>{meta}</span>{innerSteps ? <em><i aria-hidden="true"><Icon name="steps" /></i> {innerSteps} steps</em> : null}</span><Glyph state={state} /></div>;
 }
 function Card({ label, children }: { label: string; children: React.ReactNode }): React.ReactElement { return <article><small>{label}</small>{children}</article>; }
 /** Development-only design gate; not mounted by production routes or the graph. */

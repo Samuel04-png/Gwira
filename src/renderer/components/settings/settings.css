@@ -1,0 +1,67 @@
+.settings-page.settings-page {container-type:inline-size;padding:var(--gw-space-8);font-size:var(--gw-type-body);color:var(--gw-text)}
+.settings-page__header {margin-bottom:var(--gw-space-8)}
+.settings-page.settings-page h1 {font-size:var(--gw-type-page);line-height:var(--gw-leading-page);font-weight:var(--gw-weight-semibold);margin:0 0 var(--gw-space-2)}
+.settings-page.settings-page p {font-size:var(--gw-type-body);line-height:var(--gw-leading-body);color:var(--gw-text-muted);margin:0}
+.settings-page__layout {display:grid;grid-template-columns:var(--gw-settings-nav-width) minmax(0,1fr);gap:var(--gw-space-6);align-items:start}
+.settings-page__layout>nav {display:flex;flex-direction:column;gap:var(--gw-space-1)}
+.settings-page__layout>nav button {border:0;border-radius:var(--gw-radius-md);padding:var(--gw-space-2) var(--gw-space-3);text-align:left;font:inherit;background:transparent;color:var(--gw-text-muted);transition:color var(--gw-motion-fast) ease-out,background var(--gw-motion-fast) ease-out}
+.settings-page__layout>nav button:hover {background:var(--gw-hover);color:var(--gw-text)}
+.settings-page__layout>nav button:active {background:var(--gw-pressed)}
+.settings-page__layout>nav button[aria-current] {background:var(--gw-selected);color:var(--gw-text);font-weight:var(--gw-weight-medium)}
+.settings-page :is(button,input):focus-visible {outline:var(--gw-focus);outline-offset:var(--gw-space-1)}
+.settings-page__content {container-type:inline-size;min-width:0;width:100%;max-width:var(--gw-settings-content-width)}
+.settings-page .settings-section+ .settings-section {margin-top:var(--gw-space-8)}
+.settings-page .settings-section>header {margin-bottom:var(--gw-space-3)}
+.settings-page .settings-section h2 {font-size:var(--gw-type-section);font-weight:var(--gw-weight-medium);line-height:var(--gw-leading-section);margin:0 0 var(--gw-space-1)}
+.settings-page .settings-row {display:grid;grid-template-columns:minmax(0, 1.35fr) minmax(0, 1fr);align-items:start;gap:var(--gw-space-6);padding:var(--gw-space-4) 0;min-width:0}
+.settings-page .settings-row+.settings-row {border-top:var(--gw-hairline) solid var(--gw-border)}
+.settings-page .settings-row h3 {font-size:var(--gw-type-body);font-weight:var(--gw-weight-medium);margin:0 0 var(--gw-space-1);line-height:var(--gw-leading-body)}
+.settings-page .settings-row__text {min-width:0;overflow-wrap:anywhere}
+.settings-page .settings-row__control {min-width:0;max-width:100%;display:flex;justify-content:flex-end;align-items:center;min-height:var(--gw-control-form)}
+.settings-page .settings-input {position:relative;width:100%;max-width:var(--gw-settings-input-width)}
+.settings-page .settings-input input {height:var(--gw-control-form);width:100%;box-sizing:border-box}
+.settings-page .settings-input .gw-field__label {position:absolute;width:var(--gw-hairline);height:var(--gw-hairline);overflow:hidden;clip-path:inset(50%)}
+.settings-page .settings-select {width:var(--gw-settings-select-width);min-width:0;max-width:100%}
+.settings-page .settings-select>button {min-height:var(--gw-control-form);width:100%;justify-content:space-between;background:var(--gw-surface);border:var(--gw-hairline) solid var(--gw-border-control);border-radius:var(--gw-radius-md);color:var(--gw-text);padding:var(--gw-space-2) var(--gw-space-3)}
+.settings-page .settings-select .inline-select-menu {min-width:100%;right:0;left:auto}
+.settings-page .settings-status {display:inline-flex;align-items:center;gap:var(--gw-space-2);font-size:var(--gw-type-meta);line-height:var(--gw-leading-body);color:var(--gw-text-muted);text-align:right}
+.settings-page .settings-notice {display:flex;align-items:flex-start;gap:var(--gw-space-2);padding:var(--gw-space-2) 0;background:transparent;border-radius:var(--gw-radius-md);font-size:var(--gw-type-meta);line-height:var(--gw-leading-body);color:var(--gw-text-muted)}
+.settings-page .settings-notice>svg {flex-shrink:0;margin-top:var(--gw-space-1)}
+.settings-page .settings-notice[data-tone=error] {color:var(--gw-status-danger)}
+.settings-page .settings-notice[data-tone=warning] {color:var(--gw-status-warning-text)}
+.settings-page .settings-divider {border:0;border-top:var(--gw-hairline) solid var(--gw-border);margin:0 0 var(--gw-space-4)}
+.settings-page .settings-save {display:flex;align-items:center;gap:var(--gw-space-4);flex-wrap:wrap;margin-top:var(--gw-space-2)}
+.settings-page .settings-save [role=status] {font-size:var(--gw-type-meta)}
+.settings-page .settings-toggle {width:var(--gw-space-10);height:var(--gw-space-6);padding:var(--gw-space-1);border:0;border-radius:var(--gw-radius-pill);background:var(--gw-border-control);display:flex;align-items:center;transition:background var(--gw-motion-fast) ease-out}
+.settings-page .settings-toggle span {width:var(--gw-space-4);height:var(--gw-space-4);border-radius:var(--gw-radius-pill);background:var(--gw-surface);transition:transform var(--gw-motion-fast) ease-out}
+.settings-page .settings-toggle[aria-checked=true] {background:var(--gw-text)}
+.settings-page .settings-toggle[aria-checked=true] span {transform:translateX(var(--gw-space-4))}
+.settings-page .settings-toggle:hover {background:var(--gw-hover)}
+.settings-page .settings-toggle:active {background:var(--gw-pressed)}
+.settings-page .settings-toggle:disabled {opacity:var(--gw-library-disabled-opacity);cursor:not-allowed}
+@container(max-width:700px) {.settings-page__layout {grid-template-columns:1fr;gap:var(--gw-space-6)}.settings-page__layout>nav {flex-direction:row;flex-wrap:wrap}.settings-page__header {margin-bottom:var(--gw-space-6)}}
+@container(max-width:400px) {.settings-page .settings-row {grid-template-columns:minmax(0,1fr);gap:var(--gw-space-3)}.settings-page .settings-row__control {width:100%;justify-content:flex-start}.settings-page .settings-input {width:100%;max-width:100%}}
+
+.settings-page .settings-select .inline-select-menu {top:calc(100% + var(--gw-space-2));bottom:auto;border-radius:var(--gw-radius-md)}
+.settings-page .settings-select .inline-select-menu button {border:0;border-radius:var(--gw-radius-md);background:transparent}
+.settings-page .settings-select .inline-select-menu button:is(:hover,[aria-selected=true]) {background:var(--gw-selected)}
+.settings-page .settings-select .inline-select-menu button:active {background:var(--gw-pressed)}
+
+.settings-page .settings-row:has(.settings-input) {padding-bottom:var(--gw-space-10)}
+.settings-page .settings-input .gw-field__error {position:absolute;top:calc(100% + var(--gw-space-1));left:0;font-size:var(--gw-type-meta);line-height:var(--gw-leading-meta)}
+.settings-page .settings-feedback {min-height:var(--gw-settings-feedback-height);padding-top:var(--gw-space-2);font-size:var(--gw-type-meta);line-height:var(--gw-leading-body)}
+.settings-page .settings-feedback [role=status] {color:var(--gw-text-muted)}
+.settings-page .settings-save .gw-button {min-width:var(--gw-settings-save-width)}
+.settings-page .settings-status::before {content:'';width:var(--gw-space-1);height:var(--gw-space-1);border-radius:var(--gw-radius-round);background:currentColor;flex-shrink:0}
+.settings-page .settings-details {font-size:var(--gw-type-meta);line-height:var(--gw-leading-body);color:var(--gw-text-muted)}
+.settings-page .settings-details summary {width:fit-content;cursor:pointer;list-style:none;border-radius:var(--gw-radius-sm);padding:var(--gw-space-1) 0;display:flex;align-items:center;gap:var(--gw-space-1)}
+.settings-page .settings-details summary::-webkit-details-marker {display:none}
+.settings-page .settings-details summary:hover {color:var(--gw-text)}
+.settings-page .settings-details summary:active {background:var(--gw-pressed)}
+.settings-page .settings-details summary:focus-visible {outline:var(--gw-focus);outline-offset:var(--gw-space-1)}
+.settings-page .settings-details summary svg {transition:transform var(--gw-motion-fast) ease-out}
+.settings-page .settings-details[open] summary svg {transform:rotate(180deg)}
+.settings-page .settings-details p {padding:var(--gw-space-2) 0;font-size:var(--gw-type-meta)}
+@container(max-width:700px) {.settings-page__layout>nav button {padding:var(--gw-space-2)}}
+
+.settings-page .settings-select>button {font-weight:var(--gw-weight-regular)}

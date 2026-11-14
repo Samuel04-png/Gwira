@@ -1,0 +1,15 @@
+/* Geometry comes from Phosphor weights. Never paint strokes over filled paths. */
+.gw-icon { display:inline-block; flex-shrink:0; vertical-align:middle; pointer-events:none; }
+button > .gw-icon { transition:color var(--gw-motion-fast) var(--gw-ease-out),opacity var(--gw-motion-fast) var(--gw-ease-out); }
+button:disabled > .gw-icon { color:var(--gw-text-disabled); transition:none; }
+.gw-status-indicator { display:inline-flex; align-items:center; gap:var(--gw-space-1); color:inherit; white-space:nowrap; }
+.gw-status-indicator[data-status=failed] { color:var(--gw-status-danger); }
+.gw-status-indicator:is([data-status=waiting],[data-status=warning]) { color:var(--gw-status-warning-text); }
+.gw-status-indicator[data-status=offline] { color:var(--gw-text-muted); }
+.gw-status-indicator[data-status-motion=spin]>.gw-icon { animation:gw-status-spin var(--gw-icon-loading-duration) linear infinite; }
+.gw-status-indicator[data-status-motion=pulse]>.gw-icon { animation:gw-status-pulse var(--gw-icon-working-duration) ease-in-out infinite; }
+@keyframes gw-status-spin { to { transform:rotate(360deg); } }
+@keyframes gw-status-pulse { 50% { opacity:var(--gw-icon-working-opacity); } }
+@media (prefers-reduced-motion:reduce) {
+ .gw-status-indicator[data-status-motion]>.gw-icon,button>.gw-icon { animation:none; transition:none; }
+}

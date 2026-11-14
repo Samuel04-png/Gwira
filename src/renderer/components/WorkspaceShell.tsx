@@ -1,18 +1,27 @@
 import React from 'react';
 import type { WorkspaceNavigation } from './ProjectSidebar.js';
 
-/**
- * Keeps the current two supported renderer destinations isolated from the
- * application controller. Future Gwira destinations must supply a real data
- * contract before they are added here.
- */
-export function WorkspaceShell({ activeView, workspaceRef, chat, skills, businessViews = {} }: {
+/** Renders one shared route instance per destination view so local navigation state survives tab switches. */
+export function WorkspaceShell({ activeView, workspaceRef, chat, skills, special, businessViews = {} }: {
   activeView: WorkspaceNavigation;
   workspaceRef: React.RefObject<HTMLElement | null>;
   chat: React.ReactNode;
   skills: React.ReactNode;
+  special?: React.ReactNode;
   businessViews?: Partial<Record<Exclude<WorkspaceNavigation, 'home' | 'chat' | 'skills'>, React.ReactNode>>;
 }): React.ReactElement {
-  const content = activeView === 'home' || activeView === 'chat' ? chat : activeView === 'skills' ? skills : businessViews[activeView];
-  return <section className="workspace" ref={workspaceRef}>{content ?? chat}</section>;
+  const currentView = activeView === 'chat' ? 'home' : activeView;
+  const mountedViews = React.useRef(new Set<WorkspaceNavigation>([currentView]));
+  mountedViews.current.add(currentView);
+  const views = [...mountedViews.current];
+  return <section className="workspace" ref={workspaceRef} data-workspace-view={currentView}>
+      <div className="workspace__route" aria-live="off">
+      {views.map((view) => {
+        const viewContent = view === 'home' || view === 'chat' ? chat : view === 'skills' ? skills : businessViews[view];
+        const isChat = view === 'home' || view === 'chat';
+        return <div key={view} className={`workspace__view${isChat ? ' workspace__view--chat' : ''}`} hidden={view !== currentView || !!special}>{viewContent ?? chat}</div>;
+      })}
+      {special ? <div className="workspace__view workspace__view--special">{special}</div> : null}
+      </div>
+  </section>;
 }

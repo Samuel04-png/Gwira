@@ -47,7 +47,7 @@ export function createLocalOnboardingState(profile: Partial<LocalOnboardingProfi
 
 export function isStepComplete(state: LocalOnboardingState, step = state.currentStep): boolean {
   const { profile } = state;
-  if (step === 'business') return Boolean(profile.businessName.trim() && profile.businessType && profile.industry?.trim() && profile.teamSize && profile.primaryObjective?.trim());
+  if (step === 'business') return Boolean(profile.primaryObjective?.trim());
   if (step === 'organization') return Boolean(profile.organizationModel);
   if (step === 'starting-point') return Boolean(profile.selectedTemplateId);
   return true;

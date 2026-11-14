@@ -1,0 +1,12 @@
+import { describe, expect, it } from 'vitest';
+import { readSidebarPreferences, orderSidebarItems, moveSidebarItem, visibleSidebarItems, remapSidebarKeys } from '../src/renderer/sidebarModel.js';
+const items=[{key:'a',title:'Alpha',updatedAt:'2026-10-25',createdAt:'2026-10-20'},{key:'b',title:'Beta',updatedAt:'2026-10-28',createdAt:'2026-10-19'},{key:'c',title:'Charlie',updatedAt:'2026-10-26',createdAt:'2026-10-22'}];
+describe('sidebar preference and conversation ordering',()=>{
+ it('uses recorded activity for Last updated without mutating input',()=>{expect(orderSidebarItems(items,'updated').map(i=>i.key)).toEqual(['b','c','a']);expect(items.map(i=>i.key)).toEqual(['a','b','c'])});
+ it('restores manual order and includes newly arrived records',()=>{expect(orderSidebarItems(items,'manual',['c','deleted','a']).map(i=>i.key)).toEqual(['c','a','b'])});
+ it('moves both ways and drops deleted entries from persisted ordering',()=>{expect(moveSidebarItem(['a','deleted','b','c'],['a','b','c'],'a','c')).toEqual(['b','c','a']);expect(moveSidebarItem(['a','b','c'],['a','b','c'],'c','a')).toEqual(['c','a','b']);expect(moveSidebarItem(['a'],['a','b'],'missing','a')).toEqual(['a'])});
+ it('keeps selected conversations visible beyond the initial subset',()=>{const many=Array.from({length:58},(_,i)=>({key:String(i)}));expect(visibleSidebarItems(many,false,'57').map(i=>i.key)).toEqual(['0','1','2','3','57']);expect(visibleSidebarItems(many,true)).toHaveLength(58)});
+ it('keeps selection visible while progressively revealing long lists',()=>{const many=Array.from({length:200},(_,i)=>({key:String(i)}));const shown=visibleSidebarItems(many,false,'199',55);expect(shown).toHaveLength(55);expect(shown.at(-1)?.key).toBe('199');expect(visibleSidebarItems(many,false,'199',105)).toHaveLength(105)});
+ it('preserves saved pins when session identities become histories',()=>{expect(remapSidebarKeys(['session:p:live','history:p:saved','other'],new Map([['session:p:live','history:p:saved']]))).toEqual(['history:p:saved','other'])});
+ it('validates old preferences and keeps a recovery section visible',()=>{expect(readSidebarPreferences({projectSort:'name',pinnedSort:'manual'})).toMatchObject({projectSort:'name',pinnedSort:'manual',projectGrouping:'project',recentGrouping:'list'});expect(readSidebarPreferences({visible:{favorites:false,projects:false,recent:false}}).visible.projects).toBe(true);expect(readSidebarPreferences(null).recentSort).toBe('updated')});
+});

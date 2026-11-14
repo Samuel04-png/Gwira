@@ -1,5 +1,5 @@
 const appId = process.env.APP_ID || 'com.mangowork.codexdesktop';
-const productName = process.env.PRODUCT_NAME || 'Codex Desktop';
+const productName = process.env.PRODUCT_NAME || 'Gwira';
 const hasWindowsSigning = Boolean(
   process.env.WIN_CSC_LINK ||
   process.env.CSC_LINK ||
@@ -24,9 +24,10 @@ module.exports = {
   extraMetadata: {
     main: 'dist/main/main.js'
   },
+  protocols: [{ name: 'Gwira organization links', schemes: ['gwira'] }],
   asar: true,
   compression: 'maximum',
-  npmRebuild: false,
+  npmRebuild: true,
   publish: null,
   mac: {
     category: 'public.app-category.developer-tools',

@@ -1,0 +1,6 @@
+/* The isolated Inbox sample identities only; real workspace people retain initials. */
+[data-sample-avatars] .gw-msg-avatar:is([data-person-id='00000000-0000-4000-8000-000000000101'], [data-person-id='00000000-0000-4000-8000-000000000102'], [data-person-id='00000000-0000-4000-8000-000000000103'], [data-person-id='00000000-0000-4000-8000-000000000104']) { background-size: cover; background-position: center; color: transparent; }
+[data-sample-avatars] .gw-msg-avatar[data-person-id='00000000-0000-4000-8000-000000000101'] { background-image: url('./sample-avatars/avery.png'); }
+[data-sample-avatars] .gw-msg-avatar[data-person-id='00000000-0000-4000-8000-000000000102'] { background-image: url('./sample-avatars/mina.png'); }
+[data-sample-avatars] .gw-msg-avatar[data-person-id='00000000-0000-4000-8000-000000000103'] { background-image: url('./sample-avatars/jordan.png'); }
+[data-sample-avatars] .gw-msg-avatar[data-person-id='00000000-0000-4000-8000-000000000104'] { background-image: url('./sample-avatars/sam.png'); }

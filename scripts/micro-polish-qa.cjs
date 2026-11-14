@@ -1,0 +1,41 @@
+const {app,BrowserWindow}=require('electron');const fs=require('node:fs/promises');const path=require('node:path');
+const out=path.resolve('artifacts/workflow/micro-polish');const exit=app.exit.bind(app);let checking=false;const wait=ms=>new Promise(r=>setTimeout(r,ms));
+app.exit=code=>{if(code||checking)return exit(code);checking=true;check().then(()=>exit(0)).catch(e=>{console.error(e);exit(1)});};
+async function check(){
+ const w=BrowserWindow.getAllWindows()[0],wc=w.webContents;w.show();w.focus();wc.setBackgroundThrottling(false);
+ const ev=async s=>{try{return await wc.executeJavaScript(s)}catch(e){throw Error(String(e)+'; expression: '+s)}},assert=(ok,msg)=>{if(!ok)throw Error(msg)};
+ const shot=async name=>{wc.invalidate();await wait(100);await fs.writeFile(path.join(out,name+'.png'),(await wc.capturePage()).toPNG())};
+ await ev(`import(${JSON.stringify('/@fs/'+path.resolve('scripts/micro-polish-gallery.tsx'))}).then(m=>m.showMicroPolish())`);await wait(200);
+ const hover=async id=>{await ev(`document.querySelector('#${id}').dispatchEvent(new MouseEvent('mouseenter'))`)};
+ const leave=async id=>{await ev(`document.querySelector('#${id}').dispatchEvent(new MouseEvent('mouseleave'))`);await wait(150)};
+ const bounds=()=>ev(`(()=>{const e=document.querySelector('#micro-action'),r=e.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height}})()`);
+ const before=await bounds();
+ assert(await ev(`document.querySelector('#micro-short .gw-item-title').dataset.overflow==='false'`),'Short title reported overflow');
+ await hover('micro-short');await wait(500);assert(await ev(`getComputedStyle(document.querySelector('#micro-short .gw-item-title__text')).animationName==='none'`),'Short title animated');await leave('micro-short');
+ await hover('micro-long');await wait(450);
+ assert(await ev(`document.querySelector('#micro-long .gw-item-title').dataset.revealing==='true'`),'Overflow did not reveal: '+await ev(`(()=>{const e=document.querySelector('#micro-long .gw-item-title');return JSON.stringify({attrs:e.outerHTML,width:e.clientWidth,scroll:e.scrollWidth,textWidth:e.firstElementChild.getBoundingClientRect().width,button:e.parentElement.getBoundingClientRect().width})})()`));
+ await ev(`(()=>{const a=document.querySelector('#micro-long .gw-item-title__text').getAnimations()[0];if(!a)throw Error('No overflow animation');a.currentTime=a.effect.getTiming().duration/2})()`);
+ const moving=await ev(`getComputedStyle(document.querySelector('#micro-long .gw-item-title__text')).transform`);assert(moving!=='none'&&!moving.endsWith(', 0, 0)'),'Overflow text did not translate');
+ assert(await ev(`!document.querySelector('.gw-item-preview')`),'Hover scrolling also opened a card');await shot('long-title-scroll');await leave('micro-long');
+ assert(await ev(`getComputedStyle(document.querySelector('#micro-long .gw-item-title__text')).transform==='none'`),'Mouse leave did not reset');
+ await hover('micro-preview');await wait(80);assert(await ev(`!document.querySelector('.gw-item-preview')`),'Preview delay missing');await wait(420);
+ assert(await ev(`document.querySelector('.gw-item-preview')?.textContent.includes('Test-only workspace')`),'Preview context missing');
+ assert(await ev(`getComputedStyle(document.querySelector('#micro-preview .gw-item-title__text')).animationName==='none'`),'Preview competes with marquee');await shot('metadata-preview');
+ await ev(`document.querySelector('#micro-preview').dispatchEvent(new MouseEvent('mouseleave'));document.querySelector('.gw-item-preview').dispatchEvent(new MouseEvent('mouseover',{bubbles:true,relatedTarget:document.body}))`);await wait(180);assert(await ev(`!!document.querySelector('.gw-item-preview')`),'Preview not hoverable');
+ await ev(`document.querySelector('.gw-item-preview').dispatchEvent(new MouseEvent('mouseout',{bubbles:true,relatedTarget:document.body}))`);await wait(180);assert(await ev(`!document.querySelector('.gw-item-preview')`),'Preview did not dismiss');
+ wc.sendInputEvent({type:'keyDown',keyCode:'Tab'});wc.sendInputEvent({type:'keyUp',keyCode:'Tab'});
+ await ev(`document.querySelector('#micro-long').focus()`);await wait(170);
+ assert(await ev(`document.querySelector('#micro-long').getAttribute('aria-describedby')===document.querySelector('.gw-item-preview')?.id`),'Keyboard description missing: '+await ev(`JSON.stringify({active:document.activeElement.id,visible:document.activeElement.matches(':focus-visible'),described:document.querySelector('#micro-long').getAttribute('aria-describedby'),card:document.querySelector('.gw-item-preview')?.outerHTML})`));await shot('keyboard-full-title');
+ wc.sendInputEvent({type:'keyDown',keyCode:'Escape'});wc.sendInputEvent({type:'keyUp',keyCode:'Escape'});await wait(60);assert(await ev(`!document.querySelector('.gw-item-preview')`),'Escape did not dismiss');await ev(`document.activeElement.blur()`);
+ wc.debugger.attach('1.3');await wc.debugger.sendCommand('DOM.enable');await wc.debugger.sendCommand('CSS.enable');const {root}=await wc.debugger.sendCommand('DOM.getDocument');const {nodeId}=await wc.debugger.sendCommand('DOM.querySelector',{nodeId:root.nodeId,selector:'.gw-inbox-row-item'});
+ await wc.debugger.sendCommand('CSS.forcePseudoState',{nodeId,forcedPseudoClasses:['hover']});await wait(180);const after=await bounds();assert(JSON.stringify(before)===JSON.stringify(after),'Action geometry moved on hover');assert(await ev(`getComputedStyle(document.querySelector('.gw-inbox-row__actions')).opacity==='1'`),'Actions not revealed');await shot('contextual-controls');
+ await wc.debugger.sendCommand('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'reduce'}]});await hover('micro-long');await wait(470);
+ assert(await ev(`getComputedStyle(document.querySelector('#micro-long .gw-item-title__text')).animationName==='none'`),'Reduced motion animation');assert(await ev(`!!document.querySelector('.gw-item-preview')`),'Reduced motion missing full title');await shot('reduced-motion-title');
+ for(const [width,height] of [[1440,900],[1280,800],[780,640]]){w.setContentSize(width,height);await wait(160);await shot('narrow-'+width+'x'+height);assert(await ev(`document.documentElement.scrollWidth<=innerWidth`),'Window overflow')}
+ await ev(`document.querySelector('#micro-long').style.width='1000px'`);await wait(160);assert(await ev(`document.querySelector('#micro-long .gw-item-title').dataset.overflow==='false'`),'Resize did not clear overflow');
+ await ev(`document.querySelector('#micro-long').style.width='120px'`);await wait(160);assert(await ev(`document.querySelector('#micro-long .gw-item-title').dataset.overflow==='true'`),'Resize did not detect overflow');
+ await ev(`document.querySelector('#micro-long').style.width='';const b=document.querySelector('#micro-preview');b.style='position:fixed;right:8px;bottom:8px;width:150px'`);await wait(160);await hover('micro-preview');await wait(470);
+ assert(await ev(`(()=>{const r=document.querySelector('.gw-item-preview').getBoundingClientRect();return r.left>=0&&r.right<=innerWidth&&r.top>=0&&r.bottom<=innerHeight})()`),'Preview escaped viewport');await shot('preview-viewport-edge');
+ await fs.writeFile(path.join(out,'results.json'),JSON.stringify({shortNoAnimation:true,overflowAnimation:moving,leaveResets:true,previewDelay:true,metadata:true,noCompetingReveal:true,hoverable:true,keyboardDescription:true,escape:true,actions:{before,after},reducedMotion:true,resizeDetection:true,previewWithinViewport:true,sizes:[1440,1280,780]},null,2));console.log('MICRO_POLISH_QA_PASS');
+}
+import(path.resolve('dist/main/main.js'));

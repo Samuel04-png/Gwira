@@ -1,50 +1,91 @@
 import dagre from 'dagre';
+import type { DoatAvatarSpec } from '../doats/ui/types.js';
 
-/**
- * The work-graph contract is deliberately independent from React and the
- * persisted workspace schema.  Callers adapt local records into these small
- * record shapes, keeping graph construction deterministic and testable.
- */
-/** The canvas renders workflow Steps only; execution records remain context. */
-export type WorkGraphNodeType = 'step';
-export type WorkGraphEdgeType = 'handoff';
-export type WorkGraphStatus = 'default' | 'blocked' | 'waiting' | 'working' | 'completed' | 'failed';
+export type WorkGraphNodeType = 'humanWork' | 'doatWork' | 'unassignedWork' | 'approval';
+export type WorkGraphEdgeType = 'handoff' | 'gates';
+export type WorkGraphStatus = 'default' | 'blocked' | 'waiting' | 'working' | 'completed' | 'failed' | 'paused';
+export type WorkOwnerKind = 'person' | 'doat' | 'unassigned';
 
 export interface WorkGraphRecord {
   id: string;
   title: string;
   subtitle?: string;
   status?: WorkGraphStatus;
+  taskId?: string;
+  resultId?: string;
 }
 
-export interface ObjectiveRecord extends WorkGraphRecord { taskIds?: string[]; }
+export interface ObjectiveRecord extends WorkGraphRecord {
+  taskIds?: string[];
+}
+
 export interface TaskRecord extends WorkGraphRecord {
-  parentStepId?: string;
-  tools?: string[];
+  ownerKind?: WorkOwnerKind;
+  ownerId?: string;
+  ownerName?: string;
+  avatar?: DoatAvatarSpec;
+  description?: string;
+  priority?: string;
+  dueDate?: string;
+  updatedAt?: string;
   dependsOnTaskIds?: string[];
   doatRunId?: string;
   humanWorkId?: string;
-  approvalId?: string;
   resultId?: string;
+  runStatus?: string;
+  approvalId?: string;
+  /** Recorded schedule facts only. Never derived or estimated. */
+  createdAt?: string;
+  startedAt?: string;
+  completedAt?: string;
+  projectId?: string;
+  projectName?: string;
+  /** Optional plan. Not populated by the local store yet; kept separate from dueDate and from recorded runs. */
+  plannedStart?: string;
+  plannedEnd?: string;
 }
-export interface DoatRunRecord extends WorkGraphRecord { taskId?: string; resultId?: string; }
-export interface HumanWorkRecord extends WorkGraphRecord { taskId?: string; resultId?: string; }
-export interface ApprovalRecord extends WorkGraphRecord { taskId?: string; resultId?: string; }
-export interface ResultRecord extends WorkGraphRecord { producedByDoatRunId?: string; producedByHumanWorkId?: string; }
+
+export interface ApprovalRecord extends WorkGraphRecord {
+  taskId?: string;
+  reviewerName?: string;
+  requestedByName?: string;
+  decidedAt?: string;
+  resultId?: string;
+  createdAt?: string;
+}
 
 export interface WorkGraphRecords {
   objectives?: ObjectiveRecord[];
   tasks?: TaskRecord[];
-  doatRuns?: DoatRunRecord[];
-  humanWork?: HumanWorkRecord[];
   approvals?: ApprovalRecord[];
-  results?: ResultRecord[];
+  doatRuns?: WorkGraphRecord[];
+  humanWork?: WorkGraphRecord[];
+  results?: WorkGraphRecord[];
 }
 
 export interface WorkGraphNode {
   id: string;
   type: WorkGraphNodeType;
-  data: WorkGraphRecord;
+  data: WorkGraphRecord & {
+    type: WorkGraphNodeType;
+    ownerKind?: WorkOwnerKind;
+    ownerId?: string;
+    ownerName?: string;
+    avatar?: DoatAvatarSpec;
+    description?: string;
+    priority?: string;
+    dueDate?: string;
+    updatedAt?: string;
+    runStatus?: string;
+    doatRunId?: string;
+    dependsOnTaskIds?: string[];
+    taskId?: string;
+    reviewerName?: string;
+    requestedByName?: string;
+    decidedAt?: string;
+    resultId?: string;
+    createdAt?: string;
+  };
 }
 
 export interface WorkGraphEdge {
@@ -55,9 +96,9 @@ export interface WorkGraphEdge {
 }
 
 export interface WorkGraph {
+  objectives: ObjectiveRecord[];
   nodes: WorkGraphNode[];
   edges: WorkGraphEdge[];
-  /** Existing records with no explicit relationship to another existing record. */
   unlinked: WorkGraphNode[];
 }
 
@@ -69,19 +110,30 @@ export interface WorkGraphLayout extends Omit<WorkGraph, 'nodes'> {
   nodes: WorkGraphLayoutNode[];
 }
 
-const recordGroups: ReadonlyArray<readonly [WorkGraphNodeType, keyof WorkGraphRecords]> = [
-  ['step', 'tasks']
-];
-
 export function graphNodeId(type: WorkGraphNodeType, recordId: string): string {
   return `${type}:${recordId}`;
 }
 
-/** Builds only relationships named by a record; dates and statuses never create edges. */
+function taskNodeType(task: TaskRecord): WorkGraphNodeType {
+  if (task.ownerKind === 'person' || task.humanWorkId) return 'humanWork';
+  if (task.ownerKind === 'doat' || task.doatRunId) return 'doatWork';
+  return 'unassignedWork';
+}
+
+/** Builds work and approval nodes from records and edges only from explicit links. */
 export function buildGraph(records: WorkGraphRecords): WorkGraph {
-  const nodes: WorkGraphNode[] = recordGroups.flatMap(([type, group]) =>
-    (records[group] ?? []).map((data) => ({ id: graphNodeId(type, data.id), type, data }))
-  );
+  const taskNodes = (records.tasks ?? []).map((data) => ({
+    id: graphNodeId(taskNodeType(data), data.id),
+    type: taskNodeType(data),
+    data: { ...data, type: taskNodeType(data) }
+  }));
+  const approvalNodes = (records.approvals ?? []).map((data) => ({
+    id: graphNodeId('approval', data.id),
+    type: 'approval' as const,
+    data: { ...data, type: 'approval' as const }
+  }));
+  const nodes: WorkGraphNode[] = [...taskNodes, ...approvalNodes];
+  const taskNodeByTaskId = new Map((records.tasks ?? []).map((task, index) => [task.id, taskNodes[index]]));
   const existing = new Set(nodes.map((node) => node.id));
   const edges: WorkGraphEdge[] = [];
   const add = (type: WorkGraphEdgeType, source: string, target: string) => {
@@ -89,45 +141,107 @@ export function buildGraph(records: WorkGraphRecords): WorkGraph {
     const id = `${type}:${source}->${target}`;
     if (!edges.some((edge) => edge.id === id)) edges.push({ id, source, target, type });
   };
-  const id = graphNodeId;
 
-  // Objectives are section headers, never executable Steps and never handoffs.
-  // A handoff is an explicit predecessor/successor relationship between Steps.
   for (const task of records.tasks ?? []) {
-    for (const dependencyId of task.dependsOnTaskIds ?? []) add('handoff', id('step', dependencyId), id('step', task.id));
+    const target = taskNodeByTaskId.get(task.id);
+    if (!target) continue;
+    for (const dependencyId of task.dependsOnTaskIds ?? []) {
+      const dependency = taskNodeByTaskId.get(dependencyId);
+      if (dependency) add('handoff', dependency.id, target.id);
+    }
+  }
+
+  for (const approval of records.approvals ?? []) {
+    const task = approval.taskId ? taskNodeByTaskId.get(approval.taskId) : undefined;
+    if (task) add('gates', graphNodeId('approval', approval.id), task.id);
   }
 
   const linked = new Set(edges.flatMap((edge) => [edge.source, edge.target]));
-  return { nodes, edges, unlinked: nodes.filter((node) => !linked.has(node.id)) };
+  return {
+    objectives: records.objectives ?? [],
+    nodes,
+    edges,
+    unlinked: taskNodes.filter((node) => !linked.has(node.id))
+  };
 }
 
-/**
- * A deterministic dagre layout for a future graph surface. It is data-only:
- * this does not mount a canvas or add any movement behavior.
- */
-/**
- * Arrange the explicit handoff graph left-to-right.  The canvas supplies its
- * measured node dimensions after React Flow has mounted the nodes; the small
- * fallback only applies during the first measurement pass.
- */
+function graphComponents(graph: WorkGraph): WorkGraphNode[][] {
+  const adjacent = new Map(graph.nodes.map((node) => [node.id, new Set<string>()]));
+  const nodesById = new Map(graph.nodes.map((node) => [node.id, node]));
+  for (const edge of graph.edges) {
+    adjacent.get(edge.source)?.add(edge.target);
+    adjacent.get(edge.target)?.add(edge.source);
+  }
+  const visited = new Set<string>();
+  const components: WorkGraphNode[][] = [];
+  for (const node of graph.nodes) {
+    if (visited.has(node.id)) continue;
+    const component: WorkGraphNode[] = [];
+    const queue = [node.id];
+    visited.add(node.id);
+    while (queue.length) {
+      const id = queue.pop();
+      if (!id) continue;
+      const current = nodesById.get(id);
+      if (current) component.push(current);
+      for (const neighbor of adjacent.get(id) ?? []) {
+        if (visited.has(neighbor)) continue;
+        visited.add(neighbor);
+        queue.push(neighbor);
+      }
+    }
+    components.push(component);
+  }
+  return components;
+}
+
+/** Lay out verified components independently so unrelated work never overlaps. */
 export function layoutGraph(
   graph: WorkGraph,
   nodeSizes: ReadonlyMap<string, { width: number; height: number }> = new Map()
 ): WorkGraphLayout {
-  const layout = new dagre.graphlib.Graph();
-  layout.setGraph({ rankdir: 'LR', nodesep: 32, ranksep: 96 });
-  layout.setDefaultEdgeLabel(() => ({}));
-  for (const node of graph.nodes) {
-    const measured = nodeSizes.get(node.id);
-    layout.setNode(node.id, { width: measured?.width ?? 240, height: measured?.height ?? 72 });
+  const components = graphComponents(graph);
+  const placedById = new Map<string, { x: number; y: number }>();
+  let rowX = 0;
+  let rowY = 0;
+  let rowHeight = 0;
+  const rowWidthLimit = 760;
+  const componentGap = 56;
+
+  for (const component of components) {
+    const ids = new Set(component.map((node) => node.id));
+    const layout = new dagre.graphlib.Graph();
+    layout.setGraph({ rankdir: 'TB', nodesep: 28, ranksep: 64, marginx: 16, marginy: 16 });
+    layout.setDefaultEdgeLabel(() => ({}));
+    for (const node of component) {
+      const measured = nodeSizes.get(node.id);
+      layout.setNode(node.id, { width: measured?.width ?? 260, height: measured?.height ?? 80 });
+    }
+    for (const edge of graph.edges) {
+      if (ids.has(edge.source) && ids.has(edge.target)) layout.setEdge(edge.source, edge.target);
+    }
+    dagre.layout(layout);
+    const bounds = component.map((node) => {
+      const placed = layout.node(node.id) as { x: number; y: number; width: number; height: number };
+      return { node, x: placed.x - placed.width / 2, y: placed.y - placed.height / 2, width: placed.width, height: placed.height };
+    });
+    const minX = Math.min(...bounds.map((entry) => entry.x));
+    const minY = Math.min(...bounds.map((entry) => entry.y));
+    const width = Math.max(...bounds.map((entry) => entry.x + entry.width)) - minX;
+    const height = Math.max(...bounds.map((entry) => entry.y + entry.height)) - minY;
+    if (rowX > 0 && rowX + width > rowWidthLimit) {
+      rowX = 0;
+      rowY += rowHeight + componentGap;
+      rowHeight = 0;
+    }
+    for (const entry of bounds) {
+      placedById.set(entry.node.id, { x: rowX + entry.x - minX, y: rowY + entry.y - minY });
+    }
+    rowX += width + componentGap;
+    rowHeight = Math.max(rowHeight, height);
   }
-  for (const edge of graph.edges) layout.setEdge(edge.source, edge.target);
-  dagre.layout(layout);
   return {
     ...graph,
-    nodes: graph.nodes.map((node) => {
-      const placed = layout.node(node.id) as { x: number; y: number; width: number; height: number };
-      return { ...node, position: { x: placed.x - placed.width / 2, y: placed.y - placed.height / 2 } };
-    })
+    nodes: graph.nodes.map((node) => ({ ...node, position: placedById.get(node.id) ?? { x: 0, y: 0 } }))
   };
 }

@@ -6,7 +6,8 @@ import { resolveCodexCommand } from './codexLocator.js';
 import type { CodexModelInfo, CodexReasoningLevel } from '../shared/types.js';
 
 const execFileAsync = promisify(execFile);
-const defaultModels: CodexModelInfo[] = [{ slug: 'gpt-5.5', defaultReasoningLevel: 'high', supportedReasoningLevels: ['minimal', 'low', 'medium', 'high', 'xhigh'] }];
+// A failed catalog lookup must never advertise an invented model.
+const defaultModels: CodexModelInfo[] = [];
 
 interface JsonObject { [key: string]: unknown }
 
@@ -42,7 +43,7 @@ export function parseListedModels(output: string): CodexModelInfo[] {
       const slug = stringValue(model.slug);
       if (!slug) return undefined;
       const supportedReasoningLevels = arrayValue(model.supported_reasoning_levels)
-        .map((level) => reasoningLevelValue(level))
+        .map((level) => reasoningLevelValue(typeof level === 'object' && level ? (level as JsonObject).effort : level))
         .filter((level): level is CodexReasoningLevel => Boolean(level));
       const defaultReasoningLevel = reasoningLevelValue(model.default_reasoning_level);
       const modelInfo: CodexModelInfo = {

@@ -1,0 +1,6 @@
+.gwira-logo { display: block; flex-shrink: 0; height: auto; object-fit: contain; }
+.gwira-logo--compact { width: var(--gw-space-5); }
+.gwira-logo--header { width: var(--gw-space-6); }
+.gwira-logo--empty { width: var(--gw-space-16); }
+
+.gwira-logo--canvas { width: var(--gw-conversation-logo-size); }

@@ -7,13 +7,13 @@ const rendererUrl = `http://${host}:${port}`;
 const children = [];
 let shuttingDown = false;
 
-console.log(`Starting Codex Desktop dev server on ${rendererUrl}`);
+console.log(`Starting Gwira dev server on ${rendererUrl}`);
 
 const tsc = start('tsc', ['-p', 'tsconfig.electron.json', '--watch', '--preserveWatchOutput'], { label: 'tsc' });
 const vite = start('vite', ['--host', host, '--port', String(port)], { label: 'vite' });
 
 await Promise.all([
-  waitForFile('dist/main/main.js'),
+  waitForInitialCompilation(tsc),
   waitForTcp(host, port)
 ]);
 
@@ -86,11 +86,6 @@ function waitForTcp(waitHost, waitPort) {
   }));
 }
 
-async function waitForFile(path) {
-  const { access } = await import('node:fs/promises');
-  return retryUntil(path, () => access(path));
-}
-
 async function retryUntil(label, action) {
   const deadline = Date.now() + 30000;
   while (Date.now() < deadline) {
@@ -102,4 +97,16 @@ async function retryUntil(label, action) {
     }
   }
   throw new Error(`Timed out waiting for ${label}`);
+}
+
+// Existing dist files may belong to an older main/preload contract. Do not start
+// Electron until this watch process has emitted its first successful build.
+function waitForInitialCompilation(child) {
+  return new Promise((resolve, reject) => {
+    let output = '';
+    const onData = chunk => { output = (output + chunk.toString()).slice(-16000); if (/Found 0 errors\. Watching for file changes\./.test(output)) { clearTimeout(timer); child.stdout.off('data',onData); resolve(); } };
+    const timer = setTimeout(() => { child.stdout.off('data',onData); reject(new Error('Electron compilation did not finish successfully. Check the TypeScript output before restarting.')); },60000);
+    child.stdout.on('data',onData);
+    child.once('exit', () => { clearTimeout(timer); reject(new Error('Electron compiler exited before the initial build.')); });
+  });
 }

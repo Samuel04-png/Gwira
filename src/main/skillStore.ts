@@ -11,7 +11,7 @@ export type SkillDetail = CodexSkillDetail;
 
 export async function listLocalSkills(): Promise<CodexSkillInfo[]> {
   const details = await listLocalSkillDetails();
-  return details.map(({ path: _path, sourceRoot: _sourceRoot, enabled: _enabled, installType: _installType, frontmatter: _frontmatter, content: _content, ...skill }) => skill).sort((a, b) => a.name.localeCompare(b.name));
+  return details.map(({ path: _path, sourceRoot: _sourceRoot, installType: _installType, frontmatter: _frontmatter, content: _content, ...skill }) => skill).sort((a, b) => a.name.localeCompare(b.name));
 }
 
 export async function listLocalSkillDetails(): Promise<SkillDetail[]> {

@@ -1,93 +1,238 @@
+import { Icon } from "../../components/Icon.js";
 import React, { createContext, memo, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { Background, BaseEdge, Handle, MarkerType, Panel, Position, ReactFlow, ReactFlowProvider, getSmoothStepPath, useEdgesState, useNodesInitialized, useNodesState, useReactFlow, type EdgeProps, type Node } from '@xyflow/react';
+import { Background, BaseEdge, Handle, MarkerType, Panel, Position, ReactFlow, ReactFlowProvider, getSmoothStepPath, useNodesInitialized, useNodesState, useReactFlow, type EdgeProps, type Node, type NodeProps } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import type { GraphNodeData } from './GraphNode.js';
-import { StepNode } from './DevNodeGallery.js';
-import { buildGraph, layoutGraph, type WorkGraphEdge, type WorkGraphRecords } from './graphModel.js';
-import { readDevWorkflowFixture, workflowFixture } from './workflowFixtures.js';
-import { isEditedLayout, layoutScopeKey, readLayoutOverrides, snapPosition, writeLayoutOverrides, type LayoutOverrides } from './layoutOverrides.js';
+import './workflow.css';
+import type { GraphNodeData, GraphNodeDisplay } from './GraphNode.js';
+import { GraphNode } from './GraphNode.js';
+import { buildGraph, layoutGraph, type WorkGraphEdge, type WorkGraphNode, type WorkGraphRecords, type WorkGraphStatus } from './graphModel.js';
 
 type FlowNode = Node<GraphNodeData, 'workGraph'>;
-type EdgeState = 'passed' | 'active' | 'quiet' | 'next' | 'waiting' | 'blocked';
-type OwnerColor = 'coral' | 'indigo' | 'sage' | 'teal' | 'plum';
-type FlowEdge = Omit<WorkGraphEdge, 'type'> & { type: 'workflow'; data: { relationship: string; fork: boolean; join: boolean; state: EdgeState; ownerColor: OwnerColor; pulse: boolean } };
+type FlowEdge = Omit<WorkGraphEdge, 'type'> & {
+  type: 'workflow';
+  data: { relationship: WorkGraphEdge['type']; state: WorkGraphStatus };
+};
+const ViewportZoomContext = createContext(1);
 
-/** A run is considered live when it has signalled inside this window. */
-const LIVE_SIGNAL_WINDOW_MS = 90_000;
-const MAX_ANIMATED_EDGES = 24;
+function graphNodeData(node: WorkGraphNode): GraphNodeData {
+  const subtitleOwner = node.data.subtitle?.split('·')[0]?.trim();
+  return {
+    ...node.data,
+    type: node.type,
+    title: node.data.title,
+    subtitle: node.data.subtitle ?? '',
+    status: node.data.status ?? 'default',
+    ownerKind: node.data.ownerKind ?? (node.type === 'humanWork' ? 'person' : node.type === 'doatWork' ? 'doat' : 'unassigned'),
+    ownerName: node.data.ownerName ?? (node.type === 'approval' ? node.data.reviewerName : subtitleOwner) ?? (node.type === 'doatWork' ? 'Doat' : node.type === 'humanWork' ? 'Employee' : 'Unassigned')
+  };
+}
 
-function isPerson(subtitle?: string): boolean { return /Chipo|Sarah|Brian|Grace|David/.test(subtitle ?? ''); }
-function ownerColor(subtitle?: string): OwnerColor { return isPerson(subtitle) ? 'plum' : /Research/.test(subtitle ?? '') ? 'teal' : /Coding/.test(subtitle ?? '') ? 'indigo' : /Support/.test(subtitle ?? '') ? 'sage' : 'coral'; }
-function edgeState(target: GraphNodeData, liveSignal = true): EdgeState {
-  if (target.status === 'waiting') return 'waiting';
-  if (target.status === 'blocked' || target.status === 'failed') return 'blocked';
-  if (target.status === 'completed') return 'passed';
-  if (target.status === 'working') return isPerson(target.subtitle) || liveSignal ? 'active' : 'quiet';
-  return 'next';
+function flowData(node: WorkGraphNode, records: WorkGraphRecords): GraphNodeData {
+  if (node.type !== 'approval') return graphNodeData(node);
+  const task = records.tasks?.find((item) => item.id === node.data.taskId);
+  return {
+    ...graphNodeData(node),
+    title: node.data.title.startsWith('Approve') ? node.data.title : task?.title ?? node.data.title,
+    taskId: node.data.taskId
+  };
 }
-function hasLiveSignal(target: GraphNodeData, lastSignalAt?: number): boolean {
-  // The local run record currently has no heartbeat or last-event timestamp.
-  // Running is the intentionally documented fallback until that data exists.
-  return lastSignalAt ? Date.now() - lastSignalAt <= LIVE_SIGNAL_WINDOW_MS : target.status === 'working';
-}
-function toFlow(records: WorkGraphRecords, sizes?: ReadonlyMap<string, { width: number; height: number }>, simulateLiveWork = false): { nodes: FlowNode[]; edges: FlowEdge[] } {
-  const layout = layoutGraph(buildGraph(records), sizes); const outgoing = new Map<string, number>(); const incoming = new Map<string, number>();
-  layout.edges.forEach((edge) => outgoing.set(edge.source, (outgoing.get(edge.source) ?? 0) + 1));
-  layout.edges.forEach((edge) => incoming.set(edge.target, (incoming.get(edge.target) ?? 0) + 1));
-  const nodes = layout.nodes.map((node) => ({ id: node.id, type: 'workGraph' as const, position: node.position, data: { type: node.type, title: node.data.title, subtitle: node.data.subtitle ?? node.type, status: node.data.status ?? 'default' }, sourcePosition: Position.Right, targetPosition: Position.Left }));
-  const byId = new Map(nodes.map((node) => [node.id, node.data])); let pulseCount = 0;
+
+function graphToFlow(records: WorkGraphRecords, sizes?: ReadonlyMap<string, { width: number; height: number }>): { nodes: FlowNode[]; edges: FlowEdge[] } {
+  const graph = buildGraph(records);
+  const layout = layoutGraph(graph, sizes);
+  const byId = new Map(layout.nodes.map((node) => [node.id, node]));
+  const nodes = layout.nodes.map((node) => ({
+    id: node.id,
+    type: 'workGraph' as const,
+    position: node.position,
+    data: flowData(node, records),
+    sourcePosition: Position.Bottom,
+    targetPosition: Position.Top,
+    draggable: false
+  }));
   const edges = layout.edges.map((edge) => {
-    const target = byId.get(edge.target)!; const live = simulateLiveWork || hasLiveSignal(target); const state = edgeState(target, live); const pulse = state === 'active' && !isPerson(target.subtitle) && live && pulseCount++ < MAX_ANIMATED_EDGES;
-    return { ...edge, type: 'workflow' as const, data: { relationship: edge.type, fork: (outgoing.get(edge.source) ?? 0) > 4, join: (incoming.get(edge.target) ?? 0) > 4, state, ownerColor: ownerColor(target.subtitle), pulse }, markerEnd: { type: MarkerType.ArrowClosed, width: 8, height: 8 } };
+    const statusNode = edge.type === 'gates' ? byId.get(edge.source) : byId.get(edge.target);
+    return {
+      ...edge,
+      type: 'workflow' as const,
+      sourceHandle: 'source',
+      targetHandle: 'target',
+      data: { relationship: edge.type, state: statusNode?.data.status ?? 'default' },
+      markerEnd: { type: MarkerType.ArrowClosed, width: 8, height: 8 }
+    };
   });
   return { nodes, edges };
 }
-// The local business domain has no persisted task dependency write path or plan-edit permission.
-// Keep connection handles absent until both are supplied by the application boundary.
-const NodeContext = createContext({ selectedNodeId: undefined as string | undefined, zoom: 1, connected: new Set<string>(), canEditPlan: false });
-const EdgeMotionContext = createContext({ zoom: 1, reducedMotion: false, hidden: false });
-const WorkflowNode = memo(function WorkflowNode({ id, data }: { id: string; data: GraphNodeData }): React.ReactElement { const { selectedNodeId, zoom, connected, canEditPlan } = useContext(NodeContext); const selected = id === selectedNodeId; const status = data.status === 'completed' ? 'done' : data.status === 'default' ? 'pending' : data.status; const important = selected || status === 'waiting' || status === 'failed'; const display = zoom >= .8 || important && zoom >= .5 ? 'full' : zoom >= .5 || important ? 'compact' : 'dot'; const dimmed = Boolean(selectedNodeId && !connected.has(id)); const owner = /Chipo|Sarah|Brian|Grace|David/.test(data.subtitle) ? 'person' : 'doat'; const color = owner === 'person' ? 'plum' : /Research/.test(data.subtitle) ? 'teal' : /Coding/.test(data.subtitle) ? 'indigo' : /Support/.test(data.subtitle) ? 'sage' : 'coral'; return <div className="gwira-step-canvas-node"><StepNode state={status} owner={owner} color={color} title={data.title} approval={data.title.startsWith('Approve')} appearance={selected ? 'selected' : dimmed ? 'dimmed' : undefined} display={display} />{canEditPlan ? <><Handle type="target" position={Position.Left} className="gwira-workflow-handle" /><Handle type="source" position={Position.Right} className="gwira-workflow-handle" /></> : null}</div>; });
-function hashOffset(id: string): number { return [...id].reduce((value, char) => (value * 31 + char.charCodeAt(0)) >>> 0, 7) % 4000 / 1000; }
-const WorkflowEdge = memo(function WorkflowEdge({ id, sourceX, sourceY, targetX, targetY, selected, data, markerEnd }: EdgeProps): React.ReactElement {
-  const { zoom, reducedMotion, hidden } = useContext(EdgeMotionContext); const [path] = getSmoothStepPath({ sourceX, sourceY, targetX, targetY, borderRadius: 8, offset: 24 });
-  const state = (data?.state as EdgeState | undefined) ?? 'passed'; const color = state === 'waiting' ? '#aa7a22' : state === 'blocked' ? '#b44949' : `var(--gw-owner-${data?.ownerColor ?? 'coral'})`;
-  const pulse = Boolean(data?.pulse) && zoom >= .5 && !reducedMotion && !hidden; const distance = Math.hypot(targetX - sourceX, targetY - sourceY); const duration = Math.max(1.6, Math.min(4, distance / 120)); const pathId = `edge-path-${id.replace(/[^a-zA-Z0-9_-]/g, '-')}`;
-  const label = state === 'waiting' ? 'Waiting' : state === 'blocked' ? 'Blocked' : undefined; const labelX = (sourceX + targetX) / 2; const labelY = (sourceY + targetY) / 2 - 10;
-  return <><path id={pathId} d={path} fill="none" stroke="none" /><BaseEdge path={path} markerEnd={markerEnd} style={{ stroke: color, strokeWidth: state === 'active' ? 1.5 : undefined }} className={`gwira-workflow-edge ${selected ? 'is-selected' : ''} is-${state}`} />{pulse ? <circle r="3" fill={color} stroke="#fff" strokeWidth="1.5" className="gwira-workflow-edge__pulse"><animateMotion dur={`${duration}s`} begin={`-${hashOffset(id)}s`} repeatCount="indefinite" calcMode="linear"><mpath href={`#${pathId}`} /></animateMotion></circle> : null}{label ? <g className="gwira-workflow-edge__label" transform={`translate(${labelX} ${labelY})`}><rect x="-27" y="-8" width="54" height="16" rx="8" /><text textAnchor="middle" dy="3">{label}</text></g> : null}{data?.fork ? <circle cx={sourceX + 12} cy={sourceY} r="3" className="gwira-workflow-edge__fork" /> : null}{data?.join ? <circle cx={targetX - 12} cy={targetY} r="3" className="gwira-workflow-edge__fork" /> : null}</>;
+
+function displayForZoom(zoom: number, important: boolean): GraphNodeDisplay {
+  if (zoom >= 0.8 || (important && zoom >= 0.5)) return 'full';
+  return zoom >= 0.5 || important ? 'compact' : 'dot';
+}
+
+const WorkflowNode = memo(function WorkflowNode({ id, data, selected }: NodeProps<FlowNode>): React.ReactElement {
+  const zoom = useContext(ViewportZoomContext);
+  const important = selected || data.status === 'waiting' || data.status === 'failed' || data.status === 'blocked';
+  return <div className="gwira-workflow-node" data-node-id={id}>
+    <Handle className="gwira-workflow-handle" type="target" position={Position.Top} id="target" isConnectable={false} />
+    <GraphNode data={data} display={displayForZoom(zoom, important)} appearance={selected ? 'selected' : undefined} />
+    <Handle className="gwira-workflow-handle" type="source" position={Position.Bottom} id="source" isConnectable={false} />
+  </div>;
 });
-const nodeTypes = { workGraph: WorkflowNode }; const edgeTypes = { workflow: WorkflowEdge };
-function canvasFitPadding(): number { const canvas = document.querySelector<HTMLElement>('.gwira-workflow-canvas__interaction'); return 48 / Math.max(1, Math.min(canvas?.clientWidth ?? 1, canvas?.clientHeight ?? 1)); }
-function Controls({ zoom, edited, onTidy }: { zoom: number; edited: boolean; onTidy: () => void }): React.ReactElement { const { zoomIn, zoomOut, fitView } = useReactFlow(); return <Panel position="bottom-center" className="gwira-workflow-controls"><div className="gwira-workflow-controls__row" role="group" aria-label="Canvas controls"><button type="button" aria-label="Zoom out" onClick={() => void zoomOut({ duration: 150 })}>−</button><output aria-label="Zoom percentage">{zoom}%</output><button type="button" aria-label="Zoom in" onClick={() => void zoomIn({ duration: 150 })}>+</button><button type="button" onClick={() => void fitView({ padding: canvasFitPadding(), duration: 150 })}>Fit</button><span className="gwira-workflow-controls__mode" aria-label={`Layout mode: ${edited ? 'Edited' : 'Automatic'}`}>{edited ? 'Edited' : 'Automatic'}</span><button type="button" disabled={!edited} title={edited ? 'Return to automatic layout' : 'Automatic layout is already active'} onClick={onTidy}>Tidy up</button></div></Panel>; }
-function Surface({ records, selectedNodeId, onSelectNode, onOpen, simulateLiveWork, objectiveId, parentStepId, onLink }: { records: WorkGraphRecords; selectedNodeId?: string; onSelectNode?: (id: string) => void; onOpen: (id: string) => void; simulateLiveWork: boolean; objectiveId: string; parentStepId?: string; onLink?: (source: string, target: string) => void }): React.ReactElement {
-  const structureKey = useMemo(() => {
-    const graph = buildGraph(records);
-    return `${graph.nodes.map((node) => node.id).join('|')}::${graph.edges.map((edge) => edge.id).join('|')}`;
-  }, [records]);
-  const initial = useMemo(() => toFlow(records, undefined, simulateLiveWork), [simulateLiveWork, structureKey]);
-  const [nodes, setNodes, onNodesChange] = useNodesState(initial.nodes); const [edges, setEdges, onEdgesChange] = useEdgesState(initial.edges);
-  const scope = layoutScopeKey(objectiveId, parentStepId); const [overrides, setOverrides] = useState<LayoutOverrides>(() => readLayoutOverrides()); const edited = isEditedLayout(overrides, scope);
-  const { fitView, getNodes, zoomTo } = useReactFlow(); const nodesInitialized = useNodesInitialized(); const [zoom, setZoom] = useState(100); const [laidOutKey, setLaidOutKey] = useState(''); const previousStructureKey = useRef<string | undefined>(undefined);
-  const [reducedMotion, setReducedMotion] = useState(() => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches); const [hidden, setHidden] = useState(() => typeof document !== 'undefined' && document.hidden);
-  useEffect(() => { const media = window.matchMedia('(prefers-reduced-motion: reduce)'); const changed = () => setReducedMotion(media.matches); const visibility = () => setHidden(document.hidden); media.addEventListener('change', changed); document.addEventListener('visibilitychange', visibility); return () => { media.removeEventListener('change', changed); document.removeEventListener('visibilitychange', visibility); }; }, []);
+
+const WorkflowEdge = memo(function WorkflowEdge({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, selected, data, markerEnd }: EdgeProps): React.ReactElement {
+  const [path] = getSmoothStepPath({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, borderRadius: 8, offset: 24 });
+  const relationshipLabel = data?.relationship === 'gates' ? 'Approval gate' : 'Work handoff';
+  return <g aria-label={relationshipLabel}>
+    <title>{relationshipLabel}</title>
+    <BaseEdge
+      path={path}
+      markerEnd={markerEnd}
+      className={`gwira-workflow-edge is-${data?.relationship ?? 'handoff'} is-${data?.state ?? 'default'}${selected ? ' is-selected' : ''}`}
+      style={{ strokeWidth: 1.5 }}
+    />
+  </g>;
+});
+
+const nodeTypes = { workGraph: WorkflowNode };
+const edgeTypes = { workflow: WorkflowEdge };
+
+function canvasFitOptions(): { padding: number; maxZoom: number } {
+  const canvas = document.querySelector<HTMLElement>('.gwira-workflow-canvas__interaction');
+  return { padding: 48 / Math.max(1, Math.min(canvas?.clientWidth ?? 1, canvas?.clientHeight ?? 1)), maxZoom: 1.15 };
+}
+
+function CanvasControls({ zoom }: { zoom: number }): React.ReactElement {
+  const { fitView, zoomIn, zoomOut } = useReactFlow();
+  return <Panel position="bottom-left" className="gwira-workflow-controls">
+    <div className="gwira-workflow-controls__row" role="group" aria-label="Workflow canvas controls">
+      <button type="button" aria-label="Zoom out" onClick={() => void zoomOut({ duration: 150 })}><Icon name="zoom-out" /></button>
+      <output aria-label="Zoom percentage">{zoom}%</output>
+      <button type="button" aria-label="Zoom in" onClick={() => void zoomIn({ duration: 150 })}><Icon name="zoom-in" /></button>
+      <button type="button" title="Fit workflow to canvas" onClick={() => void fitView({ ...canvasFitOptions(), duration: 150 })}>Fit</button>
+    </div>
+  </Panel>;
+}
+
+function connectedPath(edges: FlowEdge[], selectedNodeId?: string): Set<string> {
+  if (!selectedNodeId) return new Set();
+  const visited = new Set<string>();
+  const queue = [selectedNodeId];
+  while (queue.length) {
+    const id = queue.pop();
+    if (!id || visited.has(id)) continue;
+    visited.add(id);
+    edges.forEach((edge) => {
+      if (edge.source === id && !visited.has(edge.target)) queue.push(edge.target);
+      if (edge.target === id && !visited.has(edge.source)) queue.push(edge.source);
+    });
+  }
+  return visited;
+}
+
+function Surface({ records, selectedNodeId, selectedEdgeId, onSelectNode, onSelectEdge }: { records: WorkGraphRecords; selectedNodeId?: string; selectedEdgeId?: string; onSelectNode?: (id: string) => void; onSelectEdge?: (id?: string) => void }): React.ReactElement {
+  const graphModel = useMemo(() => buildGraph(records), [records]);
+  const flow = useMemo(() => graphToFlow(records), [records]);
+  const structureKey = useMemo(() => `${flow.nodes.map((node) => `${node.id}:${node.type}`).join('|')}::${flow.edges.map((edge) => edge.id).join('|')}`, [flow.edges, flow.nodes]);
+  const [nodes, setNodes, onNodesChange] = useNodesState(flow.nodes);
+  const [viewportZoom, setViewportZoom] = useState(100);
+  const [layoutKey, setLayoutKey] = useState('');
+  const previousStructureKey = useRef(structureKey);
+  const nodesInitialized = useNodesInitialized();
+  const { fitView, getNodes, zoomIn, zoomOut } = useReactFlow();
+  const connected = useMemo(() => connectedPath(flow.edges, selectedNodeId), [flow.edges, selectedNodeId]);
+
   useEffect(() => {
-    if (previousStructureKey.current === structureKey) return;
+    const changedStructure = previousStructureKey.current !== structureKey;
     previousStructureKey.current = structureKey;
-    const saved = overrides[scope] ?? {}; setNodes(initial.nodes.map((node) => saved[node.id] ? { ...node, position: saved[node.id] } : node)); setEdges(initial.edges); setLaidOutKey('');
-  }, [initial, overrides, scope, setEdges, setNodes, structureKey]);
+    if (changedStructure) setLayoutKey('');
+    setNodes((current) => {
+      const previous = new Map(current.map((node) => [node.id, node]));
+      return flow.nodes.map((node) => ({ ...node, position: previous.get(node.id)?.position ?? node.position }));
+    });
+  }, [flow.nodes, setNodes, structureKey]);
+
   useEffect(() => {
-    if (!nodesInitialized || laidOutKey === structureKey || edited) return;
+    if (!nodesInitialized || layoutKey === structureKey) return;
     const sizes = new Map(getNodes().flatMap((node) => node.measured?.width && node.measured.height ? [[node.id, { width: node.measured.width, height: node.measured.height }] as const] : []));
-    if (sizes.size !== initial.nodes.length) return;
-    setNodes(toFlow(records, sizes, simulateLiveWork).nodes);
-    setLaidOutKey(structureKey);
-    requestAnimationFrame(() => void fitView({ padding: canvasFitPadding(), duration: 0 }));
-  }, [edited, fitView, getNodes, initial.nodes.length, laidOutKey, nodesInitialized, records, setNodes, simulateLiveWork, structureKey]);
-  useEffect(() => { const requested = import.meta.env.DEV ? Number(new URLSearchParams(window.location.search).get('canvasZoom')) : NaN; if (Number.isFinite(requested) && requested >= .25 && requested <= 2) { void zoomTo(requested, { duration: 0 }); setZoom(Math.round(requested * 100)); } }, [zoomTo]);
-  const connected = useMemo(() => { const result = new Set<string>(); if (!selectedNodeId) return result; const visit = (id: string, direction: 'source' | 'target') => { if (result.has(id)) return; result.add(id); edges.filter((edge) => edge[direction] === id).forEach((edge) => visit(edge[direction === 'source' ? 'target' : 'source'], direction)); }; visit(selectedNodeId, 'source'); visit(selectedNodeId, 'target'); return result; }, [edges, selectedNodeId]);
-  const select = useCallback((id: string) => onSelectNode?.(id), [onSelectNode]);
-  const keyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => { if (event.key === 'Escape') { event.preventDefault(); onSelectNode?.(''); } if (event.key === 'Enter' && selectedNodeId) { event.preventDefault(); onOpen(selectedNodeId); } if (event.key === '0') { event.preventDefault(); void fitView({ padding: canvasFitPadding(), duration: 150 }); } }, [fitView, onOpen, onSelectNode, selectedNodeId]);
-  const savePositions = useCallback((changed: FlowNode[]) => { const next = { ...overrides, [scope]: { ...(overrides[scope] ?? {}) } }; changed.forEach((node) => { next[scope][node.id] = snapPosition(node.position); }); setOverrides(next); writeLayoutOverrides(next); }, [overrides, scope]);
-  const tidy = useCallback(() => { const next = { ...overrides }; delete next[scope]; setOverrides(next); writeLayoutOverrides(next); setNodes(initial.nodes); setLaidOutKey(''); requestAnimationFrame(() => void fitView({ padding: canvasFitPadding(), duration: 150 })); }, [fitView, initial.nodes, overrides, scope, setNodes]);
-  return <div className="gwira-workflow-canvas__interaction" tabIndex={0} onKeyDown={keyDown} aria-label="Workflow canvas keyboard controls"><NodeContext.Provider value={{ selectedNodeId, zoom: zoom / 100, connected, canEditPlan: Boolean(onLink) }}><EdgeMotionContext.Provider value={{ zoom: zoom / 100, reducedMotion, hidden }}><ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange} onConnect={(connection) => connection.source && connection.target && onLink?.(connection.source.replace('step:', ''), connection.target.replace('step:', ''))} onNodeDragStop={(_, node) => savePositions([node as FlowNode])} onNodeClick={(_, node) => select(node.id)} onNodeDoubleClick={(_, node) => onOpen(node.id)} onPaneClick={() => onSelectNode?.('')} onMoveEnd={(_, viewport) => setZoom(Math.round(viewport.zoom * 100))} minZoom={0.05} maxZoom={1} nodesDraggable nodesConnectable={Boolean(onLink)} nodeDragThreshold={4} snapToGrid snapGrid={[8, 8]} selectionOnDrag selectionKeyCode="Shift" panOnDrag panOnScroll zoomOnScroll={false} zoomOnPinch><Background gap={16} size={1} color="#cbd5d9" /><Controls zoom={zoom} edited={edited} onTidy={tidy} /></ReactFlow></EdgeMotionContext.Provider></NodeContext.Provider></div>; }
-function DrillView({ step, objective, onBack }: { step: { id: string; title: string; subtitle?: string; status?: string }; objective: string; onBack: () => void }): React.ReactElement { const approval = step.title.startsWith('Approve'); const person = /Chipo|Sarah|Brian|Grace|David/.test(step.subtitle ?? ''); const failed = step.status === 'failed'; const tools = person || approval ? [] : ['Audience research', 'Campaign brief']; const inner = approval ? ['Review proposal', 'Confirm approval', 'Record decision'] : person ? ['Review customer feedback', 'Add reported notes', 'Share direction'] : ['Review brief', 'Draft variants', 'Prepare final copy']; return <section className="gwira-workflow-drill" data-testid="workflow-drill"><nav aria-label="Workflow breadcrumb"><button type="button" onClick={onBack}>{objective}</button><span>›</span><strong>{step.title}</strong></nav>{failed ? <p className="gwira-workflow-drill__failure">This step failed at sub-step 3.</p> : null}<div className="gwira-workflow-drill__boundary is-input">Input: Campaign research summary</div><div className="gwira-workflow-drill__steps">{inner.map((title, index) => <div key={title}><StepNode state={failed && index === 2 ? 'failed' : index === 0 ? 'done' : 'working'} owner={person ? 'person' : 'doat'} title={title} display="compact" approval={approval && index === 1} />{tools[index] ? <small className="gwira-workflow-drill__tool">Tool: {tools[index]}</small> : null}</div>)}</div><div className="gwira-workflow-drill__boundary is-output">Output: Draft, 3 variants</div></section>; }
-export function WorkflowCanvas({ records, selectedNodeId, onSelectNode, simulateLiveWork = false }: { records?: WorkGraphRecords; scope?: string; selectedNodeId?: string; onSelectNode?: (id: string) => void; simulateLiveWork?: boolean } = {}): React.ReactElement { const fixture = readDevWorkflowFixture(); const active = fixture ? workflowFixture(fixture) : records; const [path, setPath] = useState<string[]>((history.state?.gwiraStepPath as string[] | undefined) ?? []); if (!active || !buildGraph(active).nodes.length) return <div className="gwira-workflow-empty" data-testid="workflow-empty">No workflow Steps to supervise.</div>; const objectiveRecord = active.objectives?.[0]; const objective = objectiveRecord?.title ?? 'Workflow Steps'; const objectiveId = objectiveRecord?.id ?? 'default-objective'; const opened = path.length ? active.tasks?.find((task) => task.id === path[path.length - 1]) : undefined; const open = (id: string) => { const next = [...path, id]; setPath(next); history.pushState({ ...history.state, gwiraStepPath: next }, ''); }; const back = () => { const next = path.slice(0, -1); setPath(next); history.pushState({ ...history.state, gwiraStepPath: next }, ''); }; useEffect(() => { const pop = () => setPath((history.state?.gwiraStepPath as string[] | undefined) ?? []); addEventListener('popstate', pop); return () => removeEventListener('popstate', pop); }, []); return <div className="gwira-workflow-canvas" data-testid="workflow-canvas">{opened ? <DrillView step={opened} objective={objective} onBack={back} /> : <><header className="gwira-workflow-objective"><span>Objective</span><strong>{objective}</strong></header><ReactFlowProvider><Surface records={active} selectedNodeId={selectedNodeId} onSelectNode={onSelectNode} onOpen={open} simulateLiveWork={simulateLiveWork} objectiveId={objectiveId} /></ReactFlowProvider></>}</div>; }
+    if (sizes.size !== flow.nodes.length || !flow.nodes.every((node) => sizes.has(node.id))) return;
+    const positions = new Map(layoutGraph(graphModel, sizes).nodes.map((node) => [node.id, node.position]));
+    setNodes((current) => current.map((node) => ({ ...node, position: positions.get(node.id) ?? node.position })));
+    setLayoutKey(structureKey);
+    requestAnimationFrame(() => requestAnimationFrame(() => void fitView({ ...canvasFitOptions(), duration: 0 })));
+  }, [fitView, flow.nodes, getNodes, graphModel, layoutKey, nodesInitialized, setNodes, structureKey]);
+
+  const onMoveEnd = useCallback((_: unknown, viewport: { zoom: number }) => setViewportZoom(Math.round(viewport.zoom * 100)), []);
+  const clearSelection = useCallback(() => onSelectNode?.(''), [onSelectNode]);
+  const keyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      clearSelection();
+    } else if (event.key === '0') {
+      event.preventDefault();
+      void fitView({ ...canvasFitOptions(), duration: 150 });
+    } else if (event.key === '+' || event.key === '=') {
+      event.preventDefault();
+      void zoomIn({ duration: 150 });
+    } else if (event.key === '-') {
+      event.preventDefault();
+      void zoomOut({ duration: 150 });
+    }
+  }, [clearSelection, fitView, zoomIn, zoomOut]);
+  const nodesWithSelection = useMemo(() => nodes.map((node) => ({
+    ...node,
+    selected: node.id === selectedNodeId,
+    className: selectedNodeId && !connected.has(node.id) ? 'is-dimmed' : ''
+  })), [connected, nodes, selectedNodeId]);
+
+  return <div className="gwira-workflow-canvas__interaction" data-edge-count={flow.edges.length} tabIndex={0} onKeyDown={keyDown} aria-label="Workflow canvas. Use plus and minus to zoom, zero to fit, Escape to clear selection.">
+    <ViewportZoomContext.Provider value={viewportZoom / 100}>
+      <ReactFlow
+        nodes={nodesWithSelection}
+        edges={flow.edges.map((edge) => ({ ...edge, selected: edge.id === selectedEdgeId }))}
+        nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
+        onNodesChange={onNodesChange}
+        onNodeClick={(_, node) => { onSelectEdge?.(undefined); onSelectNode?.(node.id); }}
+        onNodeDoubleClick={(_, node) => { onSelectEdge?.(undefined); onSelectNode?.(node.id); }}
+        onEdgeClick={(_, edge) => { onSelectEdge?.(edge.id); }}
+        onPaneClick={() => { onSelectEdge?.(undefined); clearSelection(); }}
+        onMoveEnd={onMoveEnd}
+        nodesDraggable={false}
+        nodesConnectable={false}
+        elementsSelectable
+        nodesFocusable
+        minZoom={0.25}
+        maxZoom={1.5}
+        panOnDrag
+        panOnScroll
+        zoomOnScroll={false}
+        zoomOnPinch
+        aria-label="Workflow graph"
+      >
+        <Background gap={16} size={1} color="var(--gw-border)" />
+        <CanvasControls zoom={viewportZoom} />
+      </ReactFlow>
+    </ViewportZoomContext.Provider>
+  </div>;
+}
+
+export function WorkflowCanvas({ records, selectedNodeId, selectedEdgeId, onSelectNode, onSelectEdge, showObjectiveSummary = true }: { records?: WorkGraphRecords; scope?: string; selectedNodeId?: string; selectedEdgeId?: string; onSelectNode?: (id: string) => void; onSelectEdge?: (id?: string) => void; showObjectiveSummary?: boolean } = {}): React.ReactElement {
+  const active = records ?? {};
+  const graph = useMemo(() => buildGraph(active), [active]);
+  const objective = active.objectives?.[0];
+  const workNodes = graph.nodes.filter((node) => node.data.type !== 'approval');
+  const completeCount = workNodes.filter((node) => node.data.status === 'completed').length;
+  const waitingApprovals = graph.nodes.filter((node) => node.data.type === 'approval' && node.data.status === 'waiting').length;
+  return <div className="gwira-workflow-canvas" data-testid="workflow-canvas">
+    {showObjectiveSummary ? <header className="gwira-workflow-objective">
+      <span>Objective</span>
+      <strong>{objective?.title ?? 'No objective recorded'}</strong>
+      <small>{objective ? `${completeCount} of ${workNodes.length} work items complete${waitingApprovals ? ` · ${waitingApprovals} ${waitingApprovals === 1 ? 'approval' : 'approvals'} waiting` : ''}` : `${workNodes.length} work items · Objective not set`}</small>
+    </header> : null}
+    {graph.nodes.length === 0 ? <div className="gwira-workflow-empty" data-testid="workflow-empty">
+      <strong>No workflow work yet</strong>
+      <span>Recorded human work, Doat work and approvals will appear here.</span>
+    </div> : <ReactFlowProvider><Surface records={active} selectedNodeId={selectedNodeId} selectedEdgeId={selectedEdgeId} onSelectNode={onSelectNode} onSelectEdge={onSelectEdge} /></ReactFlowProvider>}
+    <span className="gwira-visually-hidden" aria-live="polite">{graph.nodes.length} workflow nodes. {objective?.title ?? 'No objective recorded.'}</span>
+  </div>;
+}

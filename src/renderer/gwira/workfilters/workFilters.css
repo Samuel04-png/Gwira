@@ -1,0 +1,13 @@
+/* Shared filter strip: always shows what is hiding work. Scoped to gwira-work-filters so no view styling leaks.
+   Buttons inherit font and colour so the strip looks the same in any view that hosts it. */
+.gwira-work-filters { display: flex; flex-wrap: wrap; align-items: center; gap: var(--gw-space-2); padding: var(--gw-space-1) var(--gw-space-3); border-bottom: 1px solid var(--gw-border, var(--gw-border)); background: var(--gw-surface-muted); color: var(--gw-text); font-size: var(--gw-type-meta); }
+.gwira-work-filters__count { color: var(--gw-text-muted, var(--gw-text-muted)); font-weight: var(--gw-weight-semibold); }
+.gwira-work-filters__chip, .gwira-work-filters__clear { display: inline-flex; align-items: center; gap: var(--gw-space-1); min-width: 0; max-width: 100%; height: var(--gw-control-compact); padding: 0 var(--gw-space-2); border: 1px solid var(--gw-border); border-radius: var(--gw-radius-sm); background: var(--gw-surface); font: inherit; font-size: var(--gw-type-meta); line-height: var(--gw-leading-meta); font-weight: var(--gw-weight-medium); color: inherit; cursor: pointer; transition: background-color var(--gw-motion-fast) var(--gw-ease-out); }
+.gwira-work-filters__chip:hover, .gwira-work-filters__clear:hover { background: var(--gw-hover); }
+.gwira-work-filters__chip:active, .gwira-work-filters__clear:active { background: var(--gw-pressed); }
+.gwira-work-filters__chip:focus-visible, .gwira-work-filters__clear:focus-visible { outline: 2px solid var(--gw-focus-color); outline-offset: 2px; }
+.gwira-work-filters__label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gwira-work-filters__chip > span[aria-hidden] { display: inline-flex; flex: none; }
+@media (prefers-reduced-motion: reduce) { .gwira-work-filters__chip, .gwira-work-filters__clear { transition: none; } }
+.gwira-work-filters__clear { border-color: transparent; background: transparent; }
+.gwira-work-filters__warning { color: var(--gw-status-warning-text); font-weight: var(--gw-weight-medium); }

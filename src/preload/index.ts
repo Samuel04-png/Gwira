@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { CodexDesktopApi, CodexExitEvent, CodexOutputEvent, DeleteHistoryRequest, OpenExternalTargetRequest, ReadLocalImageRequest, ResumeSessionRequest, SavePastedImageRequest, SendInputRequest, StartSessionRequest, StopSessionRequest, SwitchGitBranchRequest } from '../shared/types.js';
+import type { StartTerminalRequest, TerminalDataEvent, TerminalExitEvent } from '../shared/terminal.js';
 
 const channels = {
   startSession: 'codex:start-session',
@@ -28,10 +29,59 @@ const channels = {
   installCodexCli: 'codex:install-cli',
   restartApp: 'codex:restart-app',
   output: 'codex:output',
-  exit: 'codex:exit'
+  exit: 'codex:exit',
+  terminalStart: 'gwira:terminal:start',
+  terminalGet: 'gwira:terminal:get',
+  terminalWrite: 'gwira:terminal:write',
+  terminalResize: 'gwira:terminal:resize',
+  terminalClear: 'gwira:terminal:clear',
+  terminalRestart: 'gwira:terminal:restart',
+  terminalClose: 'gwira:terminal:close',
+  terminalCopy: 'gwira:terminal:copy',
+  terminalPaste: 'gwira:terminal:paste',
+  terminalData: 'gwira:terminal:data',
+  terminalExit: 'gwira:terminal:exit'
 } as const;
 
 const api: CodexDesktopApi = {
+  conversations: {request:(input,expected)=>ipcRenderer.invoke('gwira:conversations:request',input,expected)},
+  notifications: {request:(input,expected)=>ipcRenderer.invoke('gwira:notifications:request',input,expected)},
+  approvals: {request:(input,expected)=>ipcRenderer.invoke('gwira:approvals:request',input,expected)},
+  directory: {request:(input,expected)=>ipcRenderer.invoke('gwira:directory:request',input,expected)},
+  channels: {request:(input,expected)=>ipcRenderer.invoke('gwira:channels:request',input,expected)},
+  scopedPreferences: {
+    read: (key, expected) => ipcRenderer.invoke('gwira:preferences:read', {key, expected}),
+    write: (key, value, expected) => ipcRenderer.invoke('gwira:preferences:write', {key, value, expected})
+  },
+  account: {
+    snapshot:()=>ipcRenderer.invoke('gwira:account:snapshot'),command:input=>ipcRenderer.invoke('gwira:account:command',input),
+    onChange:callback=>{const listener=(_:Electron.IpcRendererEvent,value:import('../shared/accountAuth.js').AccountSnapshot)=>callback(value);ipcRenderer.on('gwira:account:changed',listener);return()=>ipcRenderer.off('gwira:account:changed',listener);},
+    listInvitations:organizationId=>ipcRenderer.invoke('gwira:account:invitation:list',{organizationId}),
+    invite:input=>ipcRenderer.invoke('gwira:account:invitation:invite',input),resendInvitation:id=>ipcRenderer.invoke('gwira:account:invitation:resend',{id}),revokeInvitation:id=>ipcRenderer.invoke('gwira:account:invitation:revoke',{id})
+  },
+  terminal: {
+    start: (request: StartTerminalRequest) => ipcRenderer.invoke(channels.terminalStart, request),
+    get: (sessionId: string) => ipcRenderer.invoke(channels.terminalGet, sessionId),
+    write: (sessionId: string, data: string) => ipcRenderer.invoke(channels.terminalWrite, sessionId, data),
+    resize: (sessionId: string, cols: number, rows: number) => ipcRenderer.invoke(channels.terminalResize, sessionId, cols, rows),
+    clear: (sessionId: string) => ipcRenderer.invoke(channels.terminalClear, sessionId),
+    restart: (sessionId: string, cols: number, rows: number) => ipcRenderer.invoke(channels.terminalRestart, sessionId, cols, rows),
+    close: (sessionId: string) => ipcRenderer.invoke(channels.terminalClose, sessionId),
+    copy: (text: string) => ipcRenderer.invoke(channels.terminalCopy, text),
+    paste: () => ipcRenderer.invoke(channels.terminalPaste),
+    onData: (callback: (event: TerminalDataEvent) => void) => {
+      const listener = (_: Electron.IpcRendererEvent, event: TerminalDataEvent) => callback(event);
+      ipcRenderer.on(channels.terminalData, listener);
+      return () => ipcRenderer.off(channels.terminalData, listener);
+    },
+    onExit: (callback: (event: TerminalExitEvent) => void) => {
+      const listener = (_: Electron.IpcRendererEvent, event: TerminalExitEvent) => callback(event);
+      ipcRenderer.on(channels.terminalExit, listener);
+      return () => ipcRenderer.off(channels.terminalExit, listener);
+    }
+  },
+  workspaceFiles:{chooseRoot:()=>ipcRenderer.invoke('gwira:files:choose'),list:(root,relative)=>ipcRenderer.invoke('gwira:files:list',root,relative),search:(root,query)=>ipcRenderer.invoke('gwira:files:search',root,query),preview:(root,relative)=>ipcRenderer.invoke('gwira:files:preview',root,relative),copyPath:(root,relative)=>ipcRenderer.invoke('gwira:files:copy-path',root,relative),reveal:(root,relative)=>ipcRenderer.invoke('gwira:files:reveal',root,relative)},
+  schedules: { read: (workspaceId) => ipcRenderer.invoke('gwira:schedules:read', workspaceId), change: (workspaceId, command) => ipcRenderer.invoke('gwira:schedules:change', workspaceId, command) },
   startSession: (request: StartSessionRequest) => ipcRenderer.invoke(channels.startSession, request),
   resumeSession: (request: ResumeSessionRequest) => ipcRenderer.invoke(channels.resumeSession, request),
   sendInput: (request: SendInputRequest) => ipcRenderer.invoke(channels.sendInput, request),

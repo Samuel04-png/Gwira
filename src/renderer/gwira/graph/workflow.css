@@ -1,0 +1,1548 @@
+.gwira-dashboard--workflow {
+  --gw-bg: var(--gw-dashboard-canvas);
+  --gw-surface-muted: var(--gw-dashboard-hover);
+  --gw-hover: var(--gw-dashboard-hover);
+  --gw-selected: var(--gw-dashboard-selected);
+  --gw-pressed: var(--gw-sidebar-pressed);
+  --gw-border: var(--gw-conversation-line);
+  --gw-border-control: var(--gw-sidebar-icon);
+  --gw-text: var(--gw-sidebar-ink);
+  --gw-text-muted: var(--gw-conversation-secondary);
+  --gw-text-secondary-strong: var(--gw-conversation-secondary);
+}
+
+.gwira-dashboard--workflow .gwira-dashboard__main {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  padding: var(--gw-space-4) var(--gw-space-5) var(--gw-space-3);
+  overflow: hidden;
+}
+
+.gwira-dashboard--workflow .gwira-workflow-header {
+  min-height: 40px;
+  margin: 0;
+  align-items: center;
+}
+
+.gwira-dashboard--workflow .gwira-workflow-header h1 {
+  color: var(--gw-text);
+  font-size: var(--gw-type-label);
+  font-weight: var(--gw-weight-semibold);
+  letter-spacing: var(--gw-tracking-heading);
+}
+
+.gwira-dashboard--workflow .gwira-workflow-header p {
+  margin-top: var(--gw-hairline);
+  font-size: var(--gw-type-meta);
+}
+
+.gwira-workflow-header__fixture {
+  padding: var(--gw-space-1) var(--gw-space-2);
+  color: var(--gw-text);
+  border: 1px solid var(--gw-border);
+  border-radius: var(--gw-radius-sm);
+  background: var(--gw-surface-muted);
+  font-size: var(--gw-type-meta);
+  font-weight: var(--gw-weight-semibold);
+  white-space: nowrap;
+}
+
+.gwira-dashboard--workflow .gwira-workflow-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  margin-top: var(--gw-space-2);
+  overflow: hidden;
+}
+
+.gwira-workflow-canvas {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+  color: var(--gw-text);
+  background: var(--gw-dashboard-canvas);
+}
+
+.gwira-dashboard--workflow .gwira-workflow-objective {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  flex: 0 0 auto;
+  gap: var(--gw-optical-offset);
+  top: auto;
+  left: auto;
+  padding: var(--gw-space-2) var(--gw-space-3) var(--gw-space-3);
+  border-bottom: 1px solid var(--gw-border);
+  background: var(--gw-dashboard-canvas);
+}
+
+.gwira-workflow-objective > span {
+  color: var(--gw-text-muted);
+  font-size: var(--gw-type-meta);
+  font-weight: var(--gw-weight-semibold);
+  letter-spacing: var(--gw-tracking-body);
+  text-transform: uppercase;
+}
+
+.gwira-workflow-objective > strong {
+  overflow: hidden;
+  color: var(--gw-text);
+  font-size: var(--gw-type-label);
+  font-weight: var(--gw-weight-semibold);
+  line-height: var(--gw-leading-body);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gwira-workflow-objective > small {
+  color: var(--gw-text-muted);
+  font-size: var(--gw-type-meta);
+  line-height: var(--gw-leading-meta);
+}
+
+.gwira-dashboard--workflow .gwira-workflow-canvas__interaction {
+  position: relative;
+  flex: 1;
+  width: 100%;
+  height: auto;
+  min-width: 0;
+  min-height: 0;
+  outline: 0;
+}
+
+.gwira-workflow-handle {
+  width: 8px;
+  height: 8px;
+  border: 0 !important;
+  background: transparent !important;
+  opacity: 0 !important;
+  pointer-events: none;
+}
+
+.gwira-workflow-canvas__interaction:focus-visible {
+  outline: 2px solid var(--gw-focus-color);
+  outline-offset: -2px;
+}
+
+.gwira-workflow-canvas__interaction > .react-flow {
+  width: 100%;
+  height: 100%;
+}
+
+.gwira-workflow-empty {
+  display: grid;
+  flex: 1;
+  align-content: center;
+  justify-items: center;
+  gap: var(--gw-space-2);
+  padding: var(--gw-space-6);
+  text-align: center;
+}
+
+.gwira-workflow-empty strong {
+  color: var(--gw-text);
+  font-size: var(--gw-type-body);
+  font-weight: var(--gw-weight-semibold);
+}
+
+.gwira-workflow-empty span {
+  max-width: 300px;
+  color: var(--gw-text-muted);
+  font-size: var(--gw-type-meta);
+  line-height: var(--gw-leading-meta);
+}
+
+.gwira-workflow-fixture-label {
+  position: absolute;
+  right: 12px;
+  top: 10px;
+  z-index: 5;
+  padding: var(--gw-space-1) var(--gw-space-2);
+  color: var(--gw-text-muted);
+  border: 1px solid var(--gw-border);
+  border-radius: var(--gw-radius-sm);
+  background: var(--gw-surface-muted);
+  font-size: var(--gw-type-meta);
+  pointer-events: none;
+}
+
+.gwira-workflow-node {
+  width: 260px;
+}
+
+.gwira-work-node {
+  position: relative;
+  box-sizing: border-box;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) 14px;
+  gap: var(--gw-space-2);
+  width: 260px;
+  min-height: 68px;
+  align-items: center;
+  padding: var(--gw-space-2) var(--gw-space-3);
+  color: var(--gw-text);
+  border: 1px solid var(--gw-border);
+  border-radius: var(--gw-radius-lg);
+  background: var(--gw-surface);
+}
+
+.gwira-work-node.is-completed {
+  color: var(--gw-text);
+  border-color: var(--gw-border);
+}
+
+.gwira-work-node.is-waiting::before,
+.gwira-work-node.is-failed::before,
+.gwira-work-node.is-blocked::before {
+  position: absolute;
+  top: 7px;
+  bottom: 7px;
+  left: -1px;
+  width: 3px;
+  border-radius: var(--gw-radius-sm);
+  content: '';
+}
+
+.gwira-work-node.is-waiting::before {
+  background: var(--gw-status-warning-bg);
+}
+
+.gwira-work-node.is-failed::before,
+.gwira-work-node.is-blocked::before {
+  background: var(--gw-status-danger);
+}
+
+.gwira-work-node.is-selected {
+  border-color: var(--gw-accent-strong);
+  box-shadow: var(--gw-shadow-none);
+}
+
+.gwira-work-node.is-dimmed {
+  opacity: 0.62;
+}
+
+.gwira-work-node__avatar {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  overflow: hidden;
+  align-self: start;
+  color: var(--gw-text);
+  border-radius: var(--gw-radius-md);
+  background: var(--gw-surface-muted);
+  font-size: var(--gw-type-meta);
+  font-weight: var(--gw-weight-semibold);
+}
+
+.gwira-work-node__avatar.is-doat {
+  background: var(--gw-surface-muted);
+}
+
+.gwira-work-node__avatar .gwira-doat-avatar {
+  display: grid;
+  width: 100% !important;
+  height: 100%;
+  place-items: center;
+}
+
+.gwira-work-node__avatar .gwira-doat-avatar svg {
+  display: block;
+}
+
+.gwira-work-node__avatar .gwira-doat-avatar__status {
+  display: none;
+}
+
+.gwira-work-node__body {
+  display: grid;
+  min-width: 0;
+  gap: var(--gw-optical-offset);
+}
+
+.gwira-work-node__kind {
+  overflow: hidden;
+  color: var(--gw-text-muted);
+  font-size: var(--gw-type-meta);
+  font-weight: var(--gw-weight-semibold);
+  letter-spacing: var(--gw-tracking-body);
+  text-overflow: ellipsis;
+  text-transform: none;
+  white-space: nowrap;
+}
+
+.gwira-work-node__body > strong {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--gw-text);
+  font-size: var(--gw-type-meta);
+  font-weight: var(--gw-weight-semibold);
+  line-height: var(--gw-leading-meta);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.gwira-work-node__meta {
+  overflow: hidden;
+  color: var(--gw-text-muted);
+  font-size: var(--gw-type-meta);
+  line-height: var(--gw-leading-meta);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gwira-work-node.is-waiting .gwira-work-node__meta {
+  color: var(--gw-status-warning);
+}
+
+.gwira-work-node.is-blocked .gwira-work-node__meta,
+.gwira-work-node.is-failed .gwira-work-node__meta {
+  color: var(--gw-status-danger);
+}
+
+.gwira-work-node__glyph {
+  display: grid;
+  width: var(--gw-icon-sm);
+  height: var(--gw-icon-sm);
+  place-items: center;
+  align-self: start;
+  margin-top: var(--gw-space-1);
+  color: var(--gw-text-muted);
+  border: 0;
+  border-radius: var(--gw-radius-round);
+  font-size: var(--gw-type-meta);
+  line-height: var(--gw-leading-tight);
+}
+
+.gwira-work-node__glyph.is-completed {
+  border: 0;
+  font-size: var(--gw-type-body);
+}
+
+
+
+.gwira-work-node__glyph.is-waiting {
+  color: var(--gw-status-warning);
+  background: var(--gw-surface-muted);
+}
+
+.gwira-work-node__glyph.is-failed {
+  color: var(--gw-status-danger);
+}
+
+.gwira-work-node__glyph.is-blocked {
+  color: var(--gw-status-danger);
+}
+
+.gwira-work-node--compact {
+  min-height: 42px;
+  grid-template-columns: 24px minmax(0, 1fr) var(--gw-icon-sm);
+  padding: var(--gw-space-2);
+}
+
+.gwira-work-node--compact .gwira-work-node__avatar {
+  width: 24px;
+  height: 24px;
+}
+
+.gwira-work-node--compact > strong {
+  overflow: hidden;
+  font-size: var(--gw-type-meta);
+  font-weight: var(--gw-weight-semibold);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gwira-work-node--compact .gwira-work-node__glyph {
+  align-self: center;
+  margin: 0;
+}
+
+.gwira-work-node--dot {
+  display: grid;
+  width: 36px;
+  min-height: 36px;
+  grid-template-columns: 1fr;
+  place-items: center;
+  padding: var(--gw-space-1);
+  border-radius: var(--gw-radius-md);
+}
+
+.gwira-work-node--dot .gwira-work-node__avatar {
+  width: 24px;
+  height: 24px;
+}
+
+.gwira-work-node--dot .gwira-work-node__glyph {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  width: var(--gw-icon-sm);
+  height: var(--gw-icon-sm);
+  margin: 0;
+  background-color: var(--gw-bg);
+}
+
+.gwira-work-node--dot.is-failed {
+  border-color: var(--gw-status-danger);
+}
+
+.gwira-workflow-edge {
+  stroke: var(--gw-text-muted);
+}
+
+.gwira-workflow-edge.is-selected {
+  stroke: var(--gw-accent-strong);
+  stroke-width: 2.5px !important;
+}
+
+.gwira-workflow-edge.is-handoff.is-default {
+  stroke: var(--gw-text);
+  stroke-dasharray: 4 4;
+}
+
+.gwira-workflow-edge.is-handoff.is-working {
+  stroke: var(--gw-text);
+}
+
+.gwira-workflow-edge.is-gates,
+.gwira-workflow-edge.is-waiting {
+  stroke: var(--gw-status-warning-text);
+}
+
+.gwira-workflow-edge.is-blocked,
+.gwira-workflow-edge.is-failed {
+  stroke: var(--gw-status-danger);
+}
+
+.gwira-workflow-controls {
+  margin-bottom: var(--gw-space-2);
+}
+
+.gwira-workflow-controls__row {
+  display: flex;
+  min-height: 30px;
+  align-items: center;
+  gap: var(--gw-optical-offset);
+  padding: var(--gw-optical-offset) var(--gw-space-1);
+  border: 1px solid var(--gw-border);
+  border-radius: var(--gw-radius-md);
+  background: var(--gw-surface-muted);
+}
+
+.gwira-workflow-controls__row button {
+  min-width: 28px;
+  height: 26px;
+  padding: 0 var(--gw-space-2);
+  color: var(--gw-text);
+  border-radius: var(--gw-radius-sm);
+  font-size: var(--gw-type-meta);
+}
+
+.gwira-workflow-controls__row button:hover {
+  background: var(--gw-hover);
+}
+
+.gwira-workflow-controls__row output {
+  min-width: 38px;
+  color: var(--gw-text-muted);
+  font-size: var(--gw-type-meta);
+  text-align: center;
+}
+
+.gwira-workflow-fixture-label {
+  display: none;
+}
+
+.gwira-workflow-panel {
+  width: 328px;
+  min-width: 328px;
+  border-left: 1px solid var(--gw-border);
+  background: var(--gw-surface);
+}
+
+.gwira-workflow-panel__header {
+  min-height: 58px;
+  justify-content: space-between;
+  padding: var(--gw-space-2) var(--gw-space-4);
+}
+
+.gwira-workflow-panel__header > div {
+  display: grid;
+  min-width: 0;
+  gap: var(--gw-space-1);
+}
+
+.gwira-workflow-panel__header > div > span {
+  color: var(--gw-text-muted);
+  font-size: var(--gw-type-meta);
+  font-weight: var(--gw-weight-semibold);
+  letter-spacing: var(--gw-tracking-body);
+}
+
+.gwira-workflow-panel__header h2 {
+  overflow: hidden;
+  font-size: var(--gw-type-body);
+  font-weight: var(--gw-weight-semibold);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gwira-workflow-panel__header > button {
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  color: var(--gw-text-muted);
+  border: 1px solid var(--gw-border);
+  border-radius: var(--gw-radius-sm);
+  font-size: var(--gw-type-section);
+}
+
+.gwira-workflow-panel__scroll,
+.gwira-workflow-inspector {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.gwira-workflow-panel__scroll > section {
+  padding: var(--gw-space-3) var(--gw-space-4) var(--gw-optical-offset);
+}
+
+.gwira-workflow-panel__scroll > section > h3,
+.gwira-workflow-inspector__section > h3 {
+  margin: 0 0 var(--gw-space-1);
+  color: var(--gw-text-muted);
+  font-size: var(--gw-type-meta);
+  font-weight: var(--gw-weight-semibold);
+  letter-spacing: var(--gw-tracking-body);
+}
+
+.gwira-worker-row {
+  display: grid;
+  width: 100%;
+  min-height: 52px;
+  grid-template-columns: 26px minmax(0, 1fr);
+  gap: var(--gw-space-2);
+  align-items: start;
+  padding: var(--gw-space-2) 0;
+  text-align: left;
+  border-top: 1px solid var(--gw-border);
+  background: transparent;
+}
+
+.gwira-worker-row:not(:disabled):hover {
+  background: var(--gw-hover);
+}
+
+.gwira-worker-row:disabled {
+  cursor: default;
+  opacity: 1;
+}
+
+.gwira-worker-row__mark {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  color: var(--gw-text);
+  border-radius: var(--gw-radius-md);
+  background: var(--gw-selected);
+  font-size: var(--gw-type-meta);
+  font-weight: var(--gw-weight-semibold);
+}
+
+.gwira-dashboard--workflow .gwira-worker-row__mark {
+  border-radius: var(--gw-radius-md);
+}
+
+.gwira-worker-row__mark.is-doat {
+  color: var(--gw-text);
+  background: var(--gw-selected);
+}
+
+.gwira-worker-row__mark.is-unassigned {
+  color: var(--gw-text-muted);
+  background: var(--gw-selected);
+}
+
+.gwira-dashboard--workflow .gwira-worker-row__mark.is-doat {
+  border-radius: var(--gw-radius-md);
+}
+
+.gwira-worker-row__content {
+  display: grid;
+  min-width: 0;
+  gap: var(--gw-optical-offset);
+}
+
+.gwira-worker-row__content strong,
+.gwira-worker-row__content small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gwira-worker-row__content strong {
+  color: var(--gw-text);
+  font-size: var(--gw-type-meta);
+  font-weight: var(--gw-weight-semibold);
+}
+
+.gwira-worker-row__content small {
+  color: var(--gw-text-muted);
+  font-size: var(--gw-type-meta);
+  line-height: var(--gw-leading-meta);
+}
+
+.gwira-worker-row__status {
+  display: flex;
+  align-items: center;
+  gap: var(--gw-space-1);
+  text-transform: capitalize;
+}
+
+.gwira-worker-row__status i {
+  width: 6px;
+  height: 6px;
+  border: 1px solid currentColor;
+  border-radius: var(--gw-radius-round);
+}
+
+.gwira-worker-row__status.is-working i {
+  color: var(--gw-accent-strong);
+  background: var(--gw-accent-strong);
+}
+
+.gwira-worker-row__status.is-waiting-approval i,
+.gwira-worker-row__status.is-waiting i {
+  color: var(--gw-status-warning-text);
+  background: var(--gw-status-warning-bg);
+}
+
+.gwira-worker-row__status.is-blocked i,
+.gwira-worker-row__status.is-failed i {
+  color: var(--gw-status-danger);
+  background: var(--gw-status-danger);
+}
+
+.gwira-workflow-panel__empty {
+  display: grid;
+  gap: var(--gw-space-1);
+  padding: var(--gw-space-5) var(--gw-space-4);
+  color: var(--gw-text-muted);
+  font-size: var(--gw-type-meta);
+}
+
+.gwira-workflow-panel__empty strong {
+  color: var(--gw-text);
+  font-size: var(--gw-type-meta);
+}
+
+.gwira-workflow-inspector {
+  display: grid;
+  align-content: start;
+}
+
+.gwira-workflow-inspector__summary {
+  display: grid;
+  gap: var(--gw-space-2);
+  padding: var(--gw-space-3) var(--gw-space-4);
+  border-bottom: 1px solid var(--gw-border);
+}
+
+.gwira-workflow-status {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  gap: var(--gw-space-1);
+  color: var(--gw-text);
+  font-size: var(--gw-type-meta);
+  font-weight: var(--gw-weight-semibold);
+  text-transform: capitalize;
+}
+
+.gwira-workflow-status i {
+  display: grid;
+  width: 14px;
+  height: 14px;
+  place-items: center;
+  border: 1px solid currentColor;
+  border-radius: var(--gw-radius-round);
+  font-size: var(--gw-type-meta);
+  font-style: normal;
+}
+
+.gwira-workflow-status.is-waiting {
+  color: var(--gw-status-warning);
+}
+
+.gwira-workflow-status.is-failed,
+.gwira-workflow-status.is-blocked {
+  color: var(--gw-status-danger);
+}
+
+.gwira-workflow-inspector__summary > p,
+.gwira-workflow-inspector__note {
+  margin: 0;
+  color: var(--gw-text-muted);
+  font-size: var(--gw-type-meta);
+  line-height: var(--gw-leading-meta);
+}
+
+.gwira-workflow-inspector__facts {
+  display: grid;
+  gap: var(--gw-space-2);
+  margin: 0;
+  padding: var(--gw-space-3) var(--gw-space-4);
+  border-bottom: 1px solid var(--gw-border);
+}
+
+.gwira-workflow-inspector__facts > div {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: var(--gw-space-2);
+  font-size: var(--gw-type-meta);
+}
+
+.gwira-workflow-inspector__facts dt {
+  color: var(--gw-text-muted);
+}
+
+.gwira-workflow-inspector__facts dd {
+  overflow: hidden;
+  margin: 0;
+  color: var(--gw-text);
+  font-size: var(--gw-type-meta);
+  text-overflow: ellipsis;
+}
+
+.gwira-workflow-inspector__note {
+  padding: var(--gw-space-3) var(--gw-space-4);
+}
+
+.gwira-workflow-inspector__section {
+  display: grid;
+  gap: var(--gw-space-2);
+  padding: var(--gw-space-3) var(--gw-space-4);
+  border-bottom: 1px solid var(--gw-border);
+}
+
+.gwira-workflow-inspector__section > div,
+.gwira-workflow-inspector__section > p {
+  display: grid;
+  gap: var(--gw-space-1);
+  margin: 0;
+  color: var(--gw-text);
+  font-size: var(--gw-type-meta);
+  line-height: var(--gw-leading-meta);
+}
+
+.gwira-workflow-inspector__section > div > small,
+.gwira-workflow-inspector__section > small,
+.gwira-workflow-inspector__section > p > small {
+  color: var(--gw-text-muted);
+  font-size: var(--gw-type-meta);
+}
+
+.gwira-workflow-inspector__actions {
+  display: flex;
+  gap: var(--gw-space-2);
+  padding: var(--gw-space-3) var(--gw-space-4);
+}
+
+.gwira-workflow-inspector__actions button {
+  min-height: 28px;
+  padding: 0 var(--gw-space-2);
+  color: var(--gw-text);
+  border: 1px solid var(--gw-border);
+  border-radius: var(--gw-radius-sm);
+  background: var(--gw-surface);
+  font-size: var(--gw-type-meta);
+}
+
+.gwira-workflow-inspector__actions button:hover:not(:disabled) {
+  background: var(--gw-hover);
+}
+
+.gwira-workflow-inspector__actions button:disabled {
+  color: var(--gw-text-muted);
+  cursor: not-allowed;
+}
+
+.gwira-workflow-canvas__interaction :focus-visible,
+.gwira-workflow-panel button:focus-visible {
+  outline: 2px solid var(--gw-accent-strong);
+  outline-offset: 2px;
+}
+
+@media (max-width: 1050px) {
+  .gwira-workflow-panel {
+    width: min(328px, 88vw);
+    min-width: 0;
+  }
+}
+
+@media (max-width: 700px) {
+  .gwira-dashboard--workflow .gwira-dashboard__main {
+    padding: var(--gw-space-3);
+  }
+
+  .gwira-work-node {
+    width: 236px;
+  }
+
+  .gwira-workflow-node {
+    width: 236px;
+  }
+
+  .gwira-workflow-objective > strong {
+    font-size: var(--gw-type-body);
+  }
+}
+
+.gwira-dashboard--workflow .gwira-dashboard__main {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  padding: var(--gw-space-4) var(--gw-space-5) var(--gw-space-3);
+  overflow: hidden;
+}
+
+.gwira-dashboard-header {
+  display: grid;
+  flex: 0 0 auto;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--gw-space-1);
+}
+
+.gwira-dashboard-header__context,
+.gwira-dashboard-header__controls,
+.gwira-dashboard-header__navigation {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+}
+
+.gwira-dashboard-header__context,
+.gwira-dashboard-header__navigation {
+  justify-content: space-between;
+  gap: var(--gw-space-3);
+}
+
+.gwira-dashboard-header__context {
+  min-height: 22px;
+}
+
+.gwira-dashboard-breadcrumb {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--gw-space-2);
+  color: var(--gw-text-muted);
+  font-size: var(--gw-type-meta);
+}
+
+.gwira-dashboard-breadcrumb strong {
+  overflow: hidden;
+  color: var(--gw-text);
+  font-weight: var(--gw-weight-semibold);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gwira-dashboard-header__controls {
+  flex: 0 0 auto;
+  gap: var(--gw-space-2);
+}
+
+.gwira-dashboard-demo-badge {
+  padding: var(--gw-space-1) var(--gw-space-2);
+  color: var(--gw-text);
+  border: 1px solid var(--gw-border);
+  border-radius: var(--gw-radius-sm);
+  background: var(--gw-surface-muted);
+  font-size: var(--gw-type-meta);
+  font-weight: var(--gw-weight-semibold);
+  white-space: nowrap;
+}
+
+.gwira-dashboard-header__objective {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: var(--gw-space-3);
+}
+
+.gwira-dashboard-header__objective h1 {
+  min-width: 0;
+  flex-shrink: 0;
+  max-width: 72%;
+  overflow: hidden;
+  color: var(--gw-text);
+  font-size: var(--gw-type-section);
+  font-weight: var(--gw-weight-semibold);
+  letter-spacing: var(--gw-tracking-heading);
+  line-height: var(--gw-leading-body);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gwira-dashboard-header__objective p {
+  min-width: 0;
+  margin: 0;
+  color: var(--gw-text-muted);
+  font-size: var(--gw-type-meta);
+  line-height: var(--gw-leading-meta);
+  white-space: nowrap;
+}
+
+.gwira-dashboard-header__navigation {
+  min-height: 30px;
+  border-bottom: 1px solid var(--gw-border);
+}
+
+.gwira-dashboard-views {
+  display: flex;
+  min-width: 0;
+  align-self: stretch;
+  gap: var(--gw-optical-offset);
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.gwira-dashboard-views button {
+  position: relative;
+  flex: 0 0 auto;
+  min-width: 0;
+  padding: 0 var(--gw-space-3);
+  color: var(--gw-text-muted);
+  border: 0;
+  background: transparent;
+  font-size: var(--gw-type-meta);
+  font-weight: var(--gw-weight-medium);
+  white-space: nowrap;
+}
+
+.gwira-dashboard-views button:hover {
+  color: var(--gw-text);
+  background: var(--gw-hover);
+}
+
+.gwira-dashboard-views button:disabled {
+  color: var(--gw-text-disabled);
+  cursor: not-allowed;
+}
+
+.gwira-dashboard-views button:disabled:hover {
+  color: var(--gw-text-disabled);
+  background: transparent;
+}
+
+.gwira-dashboard-views button[aria-selected='true'] {
+  color: var(--gw-text);
+  font-weight: var(--gw-weight-medium);
+}
+
+.gwira-dashboard-views button[aria-selected='true']::after {
+  position: absolute;
+  right: 9px;
+  bottom: -1px;
+  left: 9px;
+  height: 2px;
+  background: var(--gw-accent-strong);
+  content: '';
+}
+
+.gwira-dashboard-panel-toggle {
+  display: grid;
+  flex: 0 0 auto;
+  width: 30px;
+  height: 28px;
+  place-items: center;
+  color: var(--gw-text);
+  border: 1px solid transparent;
+  border-radius: var(--gw-radius-sm);
+  background: transparent;
+}
+
+.gwira-dashboard-panel-toggle:hover,
+.gwira-dashboard-panel-toggle[aria-expanded='false'] {
+  border-color: var(--gw-border);
+  background: var(--gw-hover);
+}
+
+.gwira-dashboard-panel-toggle svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.3;
+}
+
+.gwira-dashboard--workflow .gwira-workflow-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin-top: var(--gw-space-2);
+  overflow: hidden;
+}
+
+.gwira-dashboard--workflow .gwira-workflow-panel {
+  position: relative;
+  z-index: auto;
+  display: flex;
+  flex: 0 0 328px;
+  width: 328px;
+  min-width: 0;
+  height: auto;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: var(--gw-shadow-none);
+  transition: width var(--gw-motion-fast) var(--gw-ease-out), flex-basis var(--gw-motion-fast) var(--gw-ease-out);
+}
+
+.gwira-dashboard--workflow .gwira-workflow-panel[hidden] {
+  display: none;
+}
+
+.gwira-dashboard--workflow .gwira-workflow-panel__header {
+  display: flex;
+  flex: 0 0 auto;
+  min-height: 58px;
+  align-items: center;
+  padding: var(--gw-space-2) var(--gw-space-3);
+  border-bottom: 1px solid var(--gw-border);
+}
+
+.gwira-dashboard--workflow .gwira-workflow-panel__header > div {
+  gap: var(--gw-optical-offset);
+}
+
+.gwira-dashboard--workflow .gwira-workflow-panel__header h2 {
+  color: var(--gw-text);
+  font-size: var(--gw-type-meta);
+  font-weight: var(--gw-weight-semibold);
+}
+
+.gwira-dashboard--workflow .gwira-workflow-panel__header > div > span {
+  overflow: hidden;
+  color: var(--gw-text-muted);
+  font-size: var(--gw-type-meta);
+  font-weight: var(--gw-weight-medium);
+  letter-spacing: var(--gw-tracking-body);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gwira-dashboard--workflow .gwira-workflow-panel__tabs {
+  display: flex;
+  flex: 0 0 auto;
+  min-height: 34px;
+  gap: var(--gw-space-1);
+  padding: 0 var(--gw-space-3);
+  border-bottom: 1px solid var(--gw-border);
+}
+
+.gwira-dashboard--workflow .gwira-workflow-panel__tabs button {
+  position: relative;
+  padding: 0 var(--gw-space-2);
+  color: var(--gw-text-muted);
+  border: 0;
+  background: transparent;
+  font-size: var(--gw-type-meta);
+}
+
+.gwira-dashboard--workflow .gwira-workflow-panel__tabs button[aria-selected='true'] {
+  color: var(--gw-text);
+  font-weight: var(--gw-weight-semibold);
+}
+
+.gwira-dashboard--workflow .gwira-workflow-panel__tabs button[aria-selected='true']::after {
+  position: absolute;
+  right: 7px;
+  bottom: -1px;
+  left: 7px;
+  height: 2px;
+  background: var(--gw-accent-strong);
+  content: '';
+}
+
+.gwira-workflow-panel__content {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.gwira-workflow-panel__scope {
+  flex: 0 0 auto;
+  padding: var(--gw-space-2) var(--gw-space-3);
+  color: var(--gw-text-muted);
+  border-top: 1px solid var(--gw-border);
+  font-size: var(--gw-type-meta);
+}
+
+.gwira-dashboard--workflow .gwira-workflow-panel__scroll {
+  flex: 1 1 auto;
+  overflow: auto;
+}
+
+.gwira-workflow-panel__group {
+  padding: var(--gw-space-2) var(--gw-space-3) var(--gw-optical-offset);
+}
+
+.gwira-workflow-panel__group > h3,
+.gwira-workflow-panel__group > summary {
+  display: flex;
+  min-height: 20px;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0;
+  color: var(--gw-text);
+  font-size: var(--gw-type-meta);
+  font-weight: var(--gw-weight-semibold);
+  letter-spacing: var(--gw-tracking-body);
+}
+
+.gwira-workflow-panel__group > summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.gwira-workflow-panel__group > summary::-webkit-details-marker {
+  display: none;
+}
+
+
+
+
+
+.gwira-workflow-panel__group > h3 span,
+.gwira-workflow-panel__group > summary span {
+  margin-left: var(--gw-space-2);
+  color: var(--gw-text);
+  font-size: var(--gw-type-meta);
+  font-weight: var(--gw-weight-medium);
+}
+
+.gwira-dashboard--workflow .gwira-worker-row {
+  min-height: 0;
+  grid-template-columns: 26px minmax(0, 1fr);
+  gap: var(--gw-space-2);
+  padding: var(--gw-space-2) 0;
+}
+
+.gwira-dashboard--workflow .gwira-worker-row__content {
+  gap: var(--gw-optical-offset);
+}
+
+.gwira-dashboard--workflow .gwira-worker-row__content strong {
+  font-size: var(--gw-type-meta);
+  font-weight: var(--gw-weight-semibold);
+}
+
+.gwira-dashboard--workflow .gwira-worker-row__content small {
+  font-size: var(--gw-type-meta);
+  line-height: var(--gw-leading-meta);
+}
+
+.gwira-dashboard--workflow .gwira-worker-row__content time {
+  overflow: hidden;
+  color: var(--gw-text-muted);
+  font-size: var(--gw-type-meta);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gwira-dashboard--workflow .gwira-worker-row__status {
+  display: flex;
+  align-items: center;
+  gap: var(--gw-space-1);
+  color: var(--gw-text-muted);
+  font-size: var(--gw-type-meta);
+  line-height: var(--gw-leading-meta);
+}
+
+.gwira-dashboard--workflow .gwira-worker-row__status.is-working {
+  color: var(--gw-accent-strong);
+}
+
+.gwira-dashboard--workflow .gwira-worker-row__status.is-needs-approval,
+.gwira-dashboard--workflow .gwira-worker-row__status.is-needs-review {
+  color: var(--gw-status-warning);
+}
+
+.gwira-dashboard--workflow .gwira-worker-row__status.is-blocked,
+.gwira-dashboard--workflow .gwira-worker-row__status.is-failed {
+  color: var(--gw-status-danger);
+}
+
+.gwira-dashboard--workflow .gwira-worker-row__mark .gwira-doat-avatar {
+  width: 24px !important;
+  height: 24px;
+}
+
+.gwira-dashboard--workflow .gwira-worker-row__mark .gwira-doat-avatar svg {
+  display: block;
+}
+
+.gwira-dashboard--workflow .gwira-worker-row__mark .gwira-doat-avatar__status {
+  display: none;
+}
+
+.gwira-workflow-activity-filters {
+  display: flex;
+  flex: 0 0 auto;
+  gap: var(--gw-space-1);
+  padding: var(--gw-space-2) var(--gw-space-3) var(--gw-space-2);
+  border-bottom: 1px solid var(--gw-border);
+}
+
+.gwira-workflow-activity-filters button {
+  min-height: 23px;
+  padding: 0 var(--gw-space-2);
+  color: var(--gw-text-muted);
+  border: 1px solid transparent;
+  border-radius: var(--gw-radius-sm);
+  background: transparent;
+  font-size: var(--gw-type-meta);
+}
+
+.gwira-workflow-activity-filters button[aria-pressed='true'] {
+  color: var(--gw-text);
+  border-color: var(--gw-border);
+  background: var(--gw-selected);
+}
+
+.gwira-dashboard--workflow .gwira-workflow-activity {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0 var(--gw-space-3);
+  list-style: none;
+}
+
+.gwira-workflow-activity-day > h3 {
+  margin: var(--gw-space-2) var(--gw-space-3) 0;
+  padding-bottom: var(--gw-space-1);
+  color: var(--gw-text);
+  border-bottom: 1px solid var(--gw-border);
+  font-size: var(--gw-type-meta);
+  font-weight: var(--gw-weight-semibold);
+}
+
+.gwira-dashboard--workflow .gwira-workflow-activity li {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr);
+  gap: var(--gw-space-2);
+  padding: var(--gw-space-3) 0;
+  border-bottom: 1px solid var(--gw-border);
+}
+
+.gwira-workflow-activity__mark {
+  display: grid;
+  flex: none;
+  width: var(--gw-space-6);
+  height: var(--gw-space-6);
+  place-items: center;
+  overflow: hidden;
+  color: var(--gw-text);
+  border-radius: var(--gw-radius-md);
+  background: var(--gw-selected);
+  font-size: var(--gw-type-meta);
+  font-weight: var(--gw-weight-semibold);
+}
+
+.gwira-workflow-activity__mark.is-doat {
+  background: var(--gw-selected);
+}
+
+.gwira-workflow-activity__mark.is-demo,
+.gwira-workflow-activity__mark.is-unknown {
+  color: var(--gw-text-muted);
+  background: var(--gw-selected);
+}
+
+.gwira-workflow-activity__mark .gwira-doat-avatar {
+  width: 100% !important;
+  height: 100%;
+}
+
+.gwira-workflow-activity__mark .gwira-doat-avatar__status {
+  display: none;
+}
+
+.gwira-workflow-activity__body,
+.gwira-workflow-activity li > div {
+  display: grid;
+  min-width: 0;
+  gap: var(--gw-space-1);
+}
+
+.gwira-workflow-activity__body strong,
+.gwira-workflow-activity li > div > strong {
+  color: var(--gw-text);
+  font-size: var(--gw-type-meta);
+  font-weight: var(--gw-weight-medium);
+  line-height: var(--gw-leading-meta);
+}
+
+.gwira-workflow-activity__body small,
+.gwira-workflow-activity li > div > small {
+  color: var(--gw-text-muted);
+  font-size: var(--gw-type-meta);
+  line-height: var(--gw-leading-meta);
+}
+
+.gwira-workflow-activity__related {
+  justify-self: start;
+  padding: 0;
+  color: var(--gw-accent-strong);
+  border: 0;
+  background: transparent;
+  font-size: var(--gw-type-meta);
+  text-align: left;
+}
+
+.gwira-workflow-activity__related:hover {
+  text-decoration: underline;
+}
+
+.gwira-dashboard-empty__intro {
+  display: grid;
+  gap: var(--gw-space-1);
+  text-align: center;
+}
+
+.gwira-dashboard-empty__intro h2 {
+  font-size: var(--gw-type-label);
+}
+
+.gwira-dashboard-empty__intro p {
+  margin: 0;
+  font-size: var(--gw-type-meta);
+}
+
+.gwira-dashboard-empty {
+  display: flex;
+  width: 100%;
+  min-height: 100%;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--gw-space-4);
+  box-sizing: border-box;
+}
+
+.gwira-dashboard-header button:focus-visible,
+.gwira-dashboard-views button:focus-visible,
+.gwira-workflow-panel__tabs button:focus-visible,
+.gwira-workflow-activity-filters button:focus-visible {
+  outline: 2px solid var(--gw-accent-strong);
+  outline-offset: -2px;
+}
+
+@media (max-width: 1050px) {
+  .gwira-dashboard--workflow .gwira-dashboard__main {
+    padding-right: var(--gw-space-3);
+    padding-left: var(--gw-space-3);
+  }
+
+  .gwira-dashboard--workflow .gwira-workflow-panel {
+    flex-basis: 300px;
+    width: 300px;
+  }
+}
+
+@media (max-width: 700px) {
+  .gwira-dashboard--workflow .gwira-workflow-panel {
+    flex-basis: 270px;
+    width: 270px;
+  }
+
+  .gwira-dashboard-header__context {
+    gap: var(--gw-space-2);
+  }
+
+  .gwira-dashboard-header__objective h1 {
+    font-size: var(--gw-type-section);
+  }
+
+  .gwira-dashboard-views button {
+    padding: 0 var(--gw-space-2);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gwira-dashboard--workflow .gwira-workflow-panel {
+    transition: none;
+  }
+}
+
+.gwira-dashboard-header__navigation { gap: var(--gw-space-3); }
+.gwira-dashboard-add { position: relative; flex: 0 0 auto; }
+.gwira-dashboard-add > button {
+  min-height: 27px;
+  padding: 0 var(--gw-space-2);
+  color: var(--gw-text);
+  border: 1px solid var(--gw-border);
+  border-radius: var(--gw-radius-md);
+  background: var(--gw-surface);
+  font-size: var(--gw-type-meta);
+  font-weight: var(--gw-weight-semibold);
+}
+.gwira-dashboard-add > button:hover { background: var(--gw-hover); }
+.gwira-dashboard-add__menu {
+  position: absolute;
+  top: calc(100% + 5px);
+  right: 0;
+  z-index: 30;
+  display: grid;
+  min-width: 230px;
+  gap: var(--gw-optical-offset);
+  padding: var(--gw-space-1);
+  border: 1px solid var(--gw-border);
+  border-radius: var(--gw-radius-lg);
+  background: var(--gw-surface);
+  box-shadow: var(--gw-shadow-overlay);
+}
+.gwira-dashboard-add__menu button {
+  padding: var(--gw-space-2) var(--gw-space-2);
+  color: var(--gw-text);
+  border-radius: var(--gw-radius-sm);
+  font-size: var(--gw-type-meta);
+  text-align: left;
+}
+.gwira-dashboard-add__menu button:hover:not(:disabled) { background: var(--gw-hover); }
+.gwira-dashboard-add__menu p { margin: var(--gw-space-1) var(--gw-space-2); color: var(--gw-text); font-size: var(--gw-type-meta); line-height: var(--gw-leading-prose); }
+.gwira-dashboard-reveal-inspector {
+  position: absolute;
+  z-index: 8;
+  right: 12px;
+  bottom: 12px;
+  max-width: min(300px, calc(100% - 24px));
+  overflow: hidden;
+  padding: var(--gw-space-2) var(--gw-space-3);
+  color: var(--gw-text);
+  border: 1px solid var(--gw-border);
+  border-radius: var(--gw-radius-md);
+  background: var(--gw-surface-muted);
+  font-size: var(--gw-type-meta);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  box-shadow: var(--gw-shadow-none);
+}
+.gwira-workflow-panel__content > [role='tabpanel'] {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  flex-direction: column;
+  overflow: auto;
+}
+.gwira-inspector-form {
+  display: grid;
+  align-content: start;
+  gap: var(--gw-space-3);
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: var(--gw-space-3) var(--gw-space-4) var(--gw-space-5);
+}
+.gwira-inspector-form > label { display: grid; gap: var(--gw-space-1); color: var(--gw-text-muted); font-size: var(--gw-type-meta); font-weight: var(--gw-weight-semibold); }
+.gwira-inspector-form :is(input, textarea, select) {
+  width: 100%;
+  min-height: 32px;
+  padding: var(--gw-space-2) var(--gw-space-2);
+  color: var(--gw-text);
+  border: 1px solid var(--gw-border);
+  border-radius: var(--gw-radius-sm);
+  outline-color: var(--gw-border);
+  background: var(--gw-surface);
+  font-size: var(--gw-type-meta);
+}
+.gwira-inspector-form textarea { resize: vertical; }
+.gwira-inspector-form__scope { margin: 0; color: var(--gw-text-muted); font-size: var(--gw-type-meta); line-height: var(--gw-leading-prose); }
+.gwira-inspector-form__error { margin: 0; color: var(--gw-status-danger); font-size: var(--gw-type-meta); line-height: var(--gw-leading-prose); }
+.gwira-inspector-form__actions { display: flex; gap: var(--gw-space-2); padding-top: var(--gw-optical-offset); }
+.gwira-inspector-form__actions button, .gwira-workflow-inspector > button {
+  min-height: 29px;
+  padding: 0 var(--gw-space-2);
+  color: var(--gw-text);
+  border: 1px solid var(--gw-border);
+  border-radius: var(--gw-radius-sm);
+  background: var(--gw-surface);
+  font-size: var(--gw-type-meta);
+  font-weight: var(--gw-weight-semibold);
+}
+.gwira-inspector-form__actions button[type='submit'] { color: var(--gw-text); border-color: var(--gw-border); background: var(--gw-surface-muted); }
+.gwira-inspector-form__actions button:hover:not(:disabled), .gwira-workflow-inspector > button:hover:not(:disabled) { background: var(--gw-hover); }
+.gwira-inspector-form__actions button[type='submit']:hover:not(:disabled) { background: var(--gw-hover); }
+.gwira-inspector-form__actions button:disabled, .gwira-workflow-inspector > button:disabled { color: var(--gw-text-disabled); background: var(--gw-surface-muted); }
+.gwira-inspector-confirm {
+  position: absolute;
+  z-index: 20;
+  inset: auto 10px 10px;
+  display: grid;
+  gap: var(--gw-space-2);
+  padding: var(--gw-space-3);
+  border: 1px solid var(--gw-border);
+  border-radius: var(--gw-radius-lg);
+  background: var(--gw-surface);
+  box-shadow: var(--gw-shadow-none);
+}
+.gwira-inspector-confirm > strong { color: var(--gw-text); font-size: var(--gw-type-meta); }
+.gwira-inspector-confirm > p { margin: 0; color: var(--gw-text-muted); font-size: var(--gw-type-meta); }
+.gwira-inspector-confirm > div { display: flex; flex-wrap: wrap; gap: var(--gw-space-1); }
+.gwira-inspector-confirm button { padding: var(--gw-space-2) var(--gw-space-2); color: var(--gw-text); border: 1px solid var(--gw-border); border-radius: var(--gw-radius-sm); background: var(--gw-surface); font-size: var(--gw-type-meta); }
+.gwira-inspector-confirm button:hover { background: var(--gw-hover); }
+.gwira-inspector-confirm button:first-child { color: var(--gw-text); border-color: var(--gw-border); background: var(--gw-surface-muted); }
+.gwira-dashboard-header__objective p { overflow: hidden; text-overflow: ellipsis; }
+.gwira-demo-menu summary { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 1050px) {
+  .gwira-dashboard-header__objective { gap: var(--gw-space-2); }
+  .gwira-dashboard-header__objective h1 { max-width: 66%; font-size: var(--gw-type-section); }
+}
+@media (max-width: 1050px) {
+  .gwira-dashboard-header__objective { align-items: flex-start; }
+  .gwira-dashboard-header__objective h1 { display: -webkit-box; flex-shrink: 1; max-width: 100%; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; white-space: normal; overflow-wrap: anywhere; line-height: var(--gw-leading-body); }
+}
+
+/* Calendar and Board: below 1100px the inspector becomes an overlay drawer so the work surface keeps the full pane.
+   The stored open/closed preference is untouched; the top-bar toggle and "Show details" still control it. */
+@media (max-width: 1100px) {
+  .gwira-dashboard--workflow[data-dashboard-view='calendar'],
+  .gwira-dashboard--workflow[data-dashboard-view='board'] { position: relative; }
+
+  .gwira-dashboard--workflow[data-dashboard-view='calendar'] .gwira-workflow-panel:not([hidden]),
+  .gwira-dashboard--workflow[data-dashboard-view='board'] .gwira-workflow-panel:not([hidden]) {
+    position: absolute;
+    z-index: 30;
+    top: var(--gwira-dashboard-header-h, 0px);
+    right: 0;
+    bottom: 0;
+    flex: none;
+    width: min(328px, 100%);
+    box-shadow: var(--gw-shadow-none);
+  }
+}
+
+@media (max-width: 1100px) {
+  .gwira-dashboard--workflow .gwira-dashboard-header__navigation { flex-wrap: wrap; row-gap: var(--gw-optical-offset); }
+  .gwira-dashboard--workflow .gwira-dashboard-views { flex: 1 1 100%; min-height: 30px; }
+  .gwira-dashboard--workflow .gwira-dashboard-add { margin-left: auto; }
+  .gwira-dashboard--workflow .gwira-dashboard-views button { padding: 0 var(--gw-space-2); }
+}
+
+.gwira-workflow-panel__group > summary > .gw-icon { margin-left: auto; }
+.gwira-workflow-panel__group > summary > .group-collapse, .gwira-workflow-panel__group[open] > summary > .group-expand { display: none; }
+.gwira-workflow-panel__group[open] > summary > .group-collapse { display: inline-block; }
+
+/* Artwork occupies the existing identity slots. */
+.gwira-worker-row__mark > .gw-avatar-artwork,
+.gwira-workflow-activity__mark > .gw-avatar-artwork,
+.gwira-work-node__avatar > .gw-avatar-artwork { display:block; width:100%; height:100%; object-fit:cover; border-radius:inherit; }

@@ -32,6 +32,43 @@ async function runningManager(): Promise<{ manager: CodexExecManager; child: Fak
 }
 
 describe('CodexExecManager stop lifecycle', () => {
+  it('clears session memory and ignores late child output on context revocation', async () => {
+    const cwd = await fs.mkdtemp(path.join(os.tmpdir(), 'codex-exec-manager-'));
+    const child = new FakeChild();
+    const store = new SessionStore();
+    const manager = new CodexExecManager(store, {
+      spawnProcess: (() => child) as unknown as typeof import('node:child_process').spawn,
+      resolveCommand: async () => 'codex'
+    });
+    const session = manager.start({ cwd });
+    await manager.sendInput({ sessionId: session.id, input: 'private' });
+    const events: unknown[] = [];
+    const settled: string[] = [];
+    manager.on('output', event => events.push(event));
+    manager.on('exit', event => events.push(event));
+    manager.on('settled', id => settled.push(id));
+    manager.revokeAll();
+    expect(store.get(session.id)).toBeUndefined();
+    expect(child.signals).toEqual(['SIGTERM']);
+    child.stdout.emit('data', Buffer.from('{"type":"thread.started","thread_id":"late"}\n'));
+    child.emit('close', 143, 'SIGTERM');
+    expect(events).toEqual([]);
+    expect(settled).toEqual([session.id]);
+    expect(store.get(session.id)).toBeUndefined();
+    await fs.rm(cwd, { recursive: true, force: true });
+  });
+  it('revokes one window-owned session without deleting another session', async () => {
+    const cwd = await fs.mkdtemp(path.join(os.tmpdir(), 'codex-owner-revoked-'));
+    try {
+      const store = new SessionStore();
+      const manager = new CodexExecManager(store);
+      const first = manager.start({cwd});
+      const second = manager.start({cwd});
+      manager.revokeSession(first.id);
+      expect(store.get(first.id)).toBeUndefined();
+      expect(store.get(second.id)?.id).toBe(second.id);
+    } finally { await fs.rm(cwd, {recursive:true, force:true}); }
+  });
   it('emits exactly one idle exit when a stopped child closes non-zero', async () => {
     const { manager, child, sessionId } = await runningManager();
     const exits: Array<{ status: string; error?: string }> = [];
@@ -61,10 +98,10 @@ describe('CodexExecManager output limits', () => {
     const { manager, child, sessionId } = await runningManager();
     const output: string[] = [];
     manager.on('output', (event) => output.push(event.chunk));
-    child.stderr.emit('data', Buffer.from('x'.repeat(MAX_LIVE_OUTPUT_CHARS + 1)));
+    child.stdout.emit('data', Buffer.from('x'.repeat(MAX_LIVE_OUTPUT_CHARS + 1) + '\n'));
 
     expect(output.join('').length).toBeLessThan(MAX_LIVE_OUTPUT_CHARS + 1 + 200);
-    expect(output.filter((chunk) => chunk.includes('Live Codex output was truncated'))).toHaveLength(1);
+    expect(output.filter((chunk) => chunk.includes('Live Gwira output was truncated'))).toHaveLength(1);
   });
 
   it('caps stderr retained for a non-zero exit error', async () => {
@@ -74,7 +111,8 @@ describe('CodexExecManager output limits', () => {
     child.stderr.emit('data', Buffer.from('e'.repeat(MAX_STDERR_CHARS + 100)));
     child.emit('close', 1, null);
 
-    expect(exits[0].error?.length).toBe(MAX_STDERR_CHARS);
+    expect(exits[0].error).toContain("Gwira couldn't complete");
+    expect(exits[0].error).not.toContain('eeee');
   });
 });
 
@@ -87,7 +125,7 @@ describe('CodexExecManager startup failures', () => {
     const exits: Array<{ status: string; error?: string }> = [];
     manager.on('exit', (event) => exits.push(event));
     await expect(manager.sendInput({ sessionId: session.id, input: 'test' })).rejects.toThrow('Codex unavailable');
-    expect(store.get(session.id)).toMatchObject({ status: 'error', error: 'Codex unavailable' });
+    expect(store.get(session.id)).toMatchObject({ status: 'error', error: expect.stringContaining("Gwira couldn't complete") });
     expect(exits).toHaveLength(1);
   });
 
@@ -100,6 +138,6 @@ describe('CodexExecManager startup failures', () => {
     });
     const session = manager.start({ cwd });
     await expect(manager.sendInput({ sessionId: session.id, input: 'test' })).rejects.toThrow('spawn denied');
-    expect(store.get(session.id)).toMatchObject({ status: 'error', error: 'spawn denied' });
+    expect(store.get(session.id)).toMatchObject({ status: 'error', error: expect.stringContaining("Gwira couldn't complete") });
   });
 });

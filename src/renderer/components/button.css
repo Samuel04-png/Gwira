@@ -1,0 +1,100 @@
+/* Two scoped selectors deliberately outrank legacy form-button rules. */
+.gw-button[data-gw-button] {
+  --button-height: var(--gw-control-default);
+  --button-padding: var(--gw-space-3);
+  --button-background: var(--gw-surface);
+  --button-foreground: var(--gw-text);
+  --button-border: var(--gw-border);
+  --button-hover: var(--gw-hover);
+  --button-active: var(--gw-pressed);
+  display: inline-flex;
+  position: relative;
+  box-sizing: border-box;
+  height: var(--button-height);
+  min-height: var(--button-height);
+  min-width: var(--button-height);
+  max-width: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: var(--gw-space-2);
+  margin: 0;
+  padding: 0 var(--button-padding);
+  border: var(--gw-hairline) solid var(--button-border);
+  border-radius: var(--gw-radius-md);
+  background: var(--button-background);
+  color: var(--button-foreground);
+  font-family: var(--gw-font-sans);
+  font-size: var(--gw-type-body);
+  font-weight: var(--gw-weight-medium);
+  line-height: var(--gw-leading-body);
+  letter-spacing: var(--gw-tracking-body);
+  text-align: center;
+  text-decoration: none;
+  box-shadow: var(--gw-shadow-none);
+  cursor: pointer;
+  opacity: 1;
+  vertical-align: middle;
+  transition: background-color var(--gw-motion-fast) var(--gw-ease-out),
+    border-color var(--gw-motion-fast) var(--gw-ease-out), color var(--gw-motion-fast) var(--gw-ease-out);
+}
+.gw-button[data-gw-button][data-size='compact'] {
+  --button-height: var(--gw-control-compact);
+  --button-padding: var(--gw-space-2);
+  font-size: var(--gw-type-meta);
+  line-height: var(--gw-leading-meta);
+}
+.gw-button[data-gw-button][data-size='form'] { --button-height: var(--gw-control-form); }
+.gw-button[data-gw-button][data-icon-only] { width: var(--button-height); padding: 0; flex: none; }
+.gw-button[data-gw-button][data-variant='primary'] {
+  --button-background: var(--gw-primary-button);
+  --button-foreground: var(--gw-primary-button-foreground);
+  --button-border: var(--gw-primary-button);
+  --button-hover: var(--gw-primary-button-hover);
+  --button-active: var(--gw-primary-button-pressed);
+}
+.gw-button[data-gw-button][data-variant='secondary'] {
+  --button-background: var(--gw-surface-muted);
+  --button-border: transparent;
+  --button-hover: var(--gw-selected);
+}
+.gw-button[data-gw-button][data-variant='ghost'],
+.gw-button[data-gw-button][data-variant='link'] {
+  --button-background: transparent;
+  --button-border: transparent;
+}
+.gw-button[data-gw-button][data-variant='link'] { text-decoration: underline; text-underline-offset: var(--gw-optical-offset); }
+.gw-button[data-gw-button][data-variant='destructive'] {
+  --button-foreground: var(--gw-status-danger);
+  --button-border: var(--gw-status-danger);
+  --button-hover: var(--gw-status-danger-bg);
+  --button-active: var(--gw-pressed);
+}
+.gw-button[data-gw-button]:hover:not(:disabled) { background: var(--button-hover); }
+.gw-button[data-gw-button]:active:not(:disabled) { background: var(--button-active); }
+.gw-button[data-gw-button][aria-pressed='true'] {
+  background: var(--gw-selected);
+  color: var(--gw-text);
+  border-color: var(--gw-border-control);
+}
+.gw-button[data-gw-button][data-variant='destructive'][aria-pressed='true'] {
+  background: var(--gw-status-danger-bg);
+  color: var(--gw-status-danger);
+  border-color: var(--gw-status-danger);
+}
+.gw-button[data-gw-button][aria-pressed='true']:hover:not(:disabled),
+.gw-button[data-gw-button][aria-pressed='true']:active:not(:disabled) { background: var(--gw-pressed); }
+.gw-button[data-gw-button]:focus-visible { outline: var(--gw-focus); outline-offset: var(--gw-optical-offset); }
+.gw-button[data-gw-button]:disabled {
+  background: var(--gw-surface-muted);
+  color: var(--gw-text-disabled);
+  border-color: var(--gw-border);
+  cursor: not-allowed;
+  opacity: 1;
+}
+.gw-button[data-gw-button] > .gw-button__label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gw-button[data-gw-button][aria-busy='true'] > .gw-button__icon--running { animation: gw-button-running var(--gw-motion-running) linear infinite; }
+@keyframes gw-button-running { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .gw-button[data-gw-button] { transition: none; }
+  .gw-button[data-gw-button][aria-busy='true'] > .gw-button__icon--running { animation: none; }
+}

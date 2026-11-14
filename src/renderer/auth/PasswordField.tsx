@@ -1,0 +1,8 @@
+import React,{useId,useState} from 'react';
+import {Input} from '../components/Input.js';
+import {Button} from '../components/Button.js';
+import {passwordStrength} from './passwordStrength.js';
+export function PasswordField({label='Password',value,onChange,disabled=false,creating=false,strength=false,onForgot}:{label?:string;value:string;onChange:(value:string)=>void;disabled?:boolean;creating?:boolean;strength?:boolean;onForgot?:()=>void}):React.ReactElement{
+ const id=useId(),[visible,setVisible]=useState(false),rating=passwordStrength(value);
+ return <div className="account-password"><div className="account-password__label"><label htmlFor={id}>{label}</label>{onForgot?<Button variant="link" disabled={disabled} onClick={onForgot}>Forgot password?</Button>:null}</div><div className="account-password__input"><Input id={id} value={value} onChange={e=>onChange(e.target.value)} type={visible?'text':'password'} autoComplete={creating?'new-password':'current-password'} minLength={creating?12:1} maxLength={4096} required disabled={disabled} aria-describedby={strength?id+'-strength':undefined}/><Button iconOnly icon={visible?'eye-off':'eye'} aria-label={visible?'Hide password':'Show password'} title={visible?'Hide password':'Show password'} aria-pressed={visible} variant="ghost" disabled={disabled} onClick={()=>setVisible(v=>!v)}/></div>{strength?<div className="account-strength" data-strength={rating.score} id={id+'-strength'}><span className="account-strength__bars" aria-hidden="true">{[1,2,3,4].map(n=><i key={n} data-filled={n<=rating.score}/>)}</span><small>{rating.label}</small></div>:null}</div>;
+}

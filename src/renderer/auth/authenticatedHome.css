@@ -1,0 +1,50 @@
+.authenticated-home { height:100dvh; color:var(--gw-text); }
+.authenticated-home__bar { flex:none; }
+.authenticated-home__bar .global-tab { flex:0 1 auto; min-width:96px; max-width:200px; }
+.authenticated-home__body { flex:1; min-height:0; display:flex; }
+.authenticated-home__rail { box-sizing:border-box; }
+.authenticated-home__rail button { cursor:pointer; }
+.authenticated-home__rail-home,.authenticated-home__avatar { display:grid; place-items:center; width:36px; height:36px; border:0; border-radius:8px; background:var(--gw-surface-muted); color:var(--gw-text); }
+.authenticated-home__account { position:relative; margin-top:auto; }
+.authenticated-home__avatar { font-weight:600; }
+.authenticated-home__rail .authenticated-home__avatar { background:var(--gw-selected); }
+.authenticated-home__menu { position:fixed; z-index:10000; width:220px; max-width:calc(100vw - 40px); max-height:calc(100vh - 16px); overflow:auto; box-sizing:border-box; display:grid; gap:8px; padding:12px; background:var(--gw-surface); border:1px solid var(--gw-border); border-radius:8px; box-shadow:var(--gw-shadow-overlay); }
+.authenticated-home__menu strong { overflow-wrap:anywhere; }
+.authenticated-home__menu small { color:var(--gw-text-muted); overflow-wrap:anywhere; }
+.authenticated-home__menu button { text-align:left; padding:8px; border:0; border-radius:8px; color:inherit; background:transparent; }
+.authenticated-home__menu button:hover { background:var(--gw-hover); }
+.authenticated-home__menu button:focus-visible { outline:var(--gw-focus); outline-offset:3px; }
+.authenticated-home__content { flex:1; min-width:0; overflow:auto; display:flex; justify-content:center; }
+.authenticated-home__inner { width:min(740px,100%); box-sizing:border-box; padding:clamp(60px,13vh,128px) 28px 40px; }
+.authenticated-home__welcome { text-align:center; margin-bottom:28px; }
+.authenticated-home__welcome img { width:64px; margin:0 auto 16px; }
+.authenticated-home__welcome h1 { font-size:var(--gw-type-page); font-weight:500; margin:0 0 12px; }
+.authenticated-home__welcome p { color:var(--gw-text-muted); margin:0; }
+.authenticated-home__composer { width:100%; box-sizing:border-box; margin:0; border-radius:20px; border:1px solid var(--gw-border); box-shadow:var(--gw-shadow-overlay); }
+.authenticated-home__composer:focus-within { border-color:color-mix(in srgb,var(--gw-focus-color) 55%,var(--gw-border)); box-shadow:0 0 0 3px color-mix(in srgb,var(--gw-focus-color) 14%,transparent); }
+.authenticated-home__composer textarea { width:100%; box-sizing:border-box; resize:none; border:0; background:transparent; outline:none; font:inherit; }
+.authenticated-home__composer .composer-footer>span { color:var(--gw-text-muted); font-size:var(--gw-type-meta); }
+.authenticated-home__ideas { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; margin-top:20px; }
+.authenticated-home__ideas button { display:flex; align-items:flex-start; text-align:left; gap:8px; padding:12px; border:1px solid var(--gw-border); border-radius:8px; background:var(--gw-surface); color:var(--gw-text); cursor:pointer; }
+.authenticated-home__ideas button:hover { background:var(--gw-hover); }
+.authenticated-home__ideas strong,.authenticated-home__ideas small { display:block; }
+.authenticated-home__ideas small { margin-top:4px; color:var(--gw-text-muted); line-height:1.4; }
+.authenticated-home__error { color:var(--gw-status-danger); }
+.authenticated-home__notice { color:var(--gw-text-muted); }
+.authenticated-home__sr { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); }
+.authenticated-home button:focus-visible { outline:var(--gw-focus); outline-offset:3px; }
+.workspace__view--unavailable { padding:var(--gw-space-6); color:var(--gw-text); }
+.workspace__view--unavailable p { color:var(--gw-text-muted); }
+@media(max-width:900px) { .authenticated-home__ideas { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+.authenticated-tabs-error {
+  position: fixed;
+  z-index: 100;
+  top: 48px;
+  right: 16px;
+  max-width: min(440px, calc(100vw - 32px));
+  padding: 10px 12px;
+  border: 1px solid var(--gw-border);
+  border-radius: 8px;
+  background: var(--gw-surface);
+  box-shadow: var(--gw-shadow-overlay);
+}

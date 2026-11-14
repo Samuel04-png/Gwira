@@ -1,0 +1,522 @@
+/* Gwira foundations. Authored interface values belong here; stored appearance
+   data and user content retain their own values. Layout/graph data are not tokens. */
+:root {
+  --gw-icon-size-14: 14px;
+  --gw-icon-size-16: 16px;
+  --gw-icon-size-18: 18px;
+  --gw-icon-size-20: 20px;
+  --gw-icon-size-24: 24px;
+  --gw-icon-loading-duration: 1000ms;
+  --gw-icon-working-duration: 1800ms;
+  --gw-icon-working-opacity: .55;
+
+  --gw-library-disabled-opacity: 0.5;
+  --gw-library-card-width: 184px;
+  --gw-library-search-width: 240px;
+  --gw-library-image-max: 360px;
+  --gw-library-paper-height: 196px;
+  --gw-library-dialog-width: 720px;
+  --gw-library-editor-height: 240px;
+  --gw-library-border: #EFEFF0;
+  --gw-library-selection: #F2F3F3;
+  --gw-library-ink: #191C1D;
+
+  --gw-dashboard-control-height: 32px;
+  --gw-dashboard-inspector-breakpoint: 900px;
+  --gw-dashboard-menu-width: 240px;
+  --gw-dashboard-toolbar-breakpoint: 900px;
+  --gw-work-row-height: 64px;
+  --gw-work-avatar-size: 28px;
+  --gw-work-list-width: 320px;
+  --gw-work-composer-max: 120px;
+  --gw-work-status-success: #237245;
+  --gw-work-open-motion: 150ms;
+  --gw-work-menu-width: 240px;
+  --gw-work-menu-layer: 5;
+  --gw-work-resize-layer: 6;
+  --gw-work-dock-layer: 42;
+
+  color-scheme: light;
+  font-family: var(--gw-font-sans);
+  font-size: var(--gw-type-body);
+  line-height: var(--gw-leading-body);
+  /* Approved brand accents; semantic warning and owner colours stay separate. */
+  --gw-brand-indigo: #4254E6;
+  --gw-dot: #4862FC;
+  --gw-shell-topbar-height: 38px;
+  --gw-shell-sidebar-width: 324px;
+  --gw-dashboard-canvas: var(--gw-conversation-canvas);
+  --gw-dashboard-hover: #F3F4F6;
+  --gw-dashboard-selected: #E9EDF1;
+  --gw-bg: #FAF9F6;
+  --gw-surface: #FFFFFF;
+  --gw-sidebar: #F4F2ED;
+  --gw-surface-muted: #F4F2ED;
+  --gw-border: #E6E3DC;
+  --gw-border-control: #8C877C;
+  --gw-text: #3B3D3F;
+  --gw-text-muted: #4F4C46;
+  --gw-text-secondary-strong: #45423D;
+  --gw-hover: #EEECE6;
+  --gw-selected: #EDEAE3;
+  --gw-pressed: #E6E3DC;
+  --gw-focus-color: var(--gw-brand-indigo);
+  --gw-action-bg: var(--gw-brand-indigo);
+  --gw-action-fg: #FFFFFF;
+  --gw-action-hover: color-mix(in srgb, var(--gw-brand-indigo) 84%, black);
+  --gw-link: var(--gw-brand-indigo);
+  --gw-text-disabled: #8C877C;
+  --gw-owner-coral: #C4684F;
+  --gw-owner-indigo: #4D5FB5;
+  --gw-owner-sage: #3F8A67;
+  --gw-owner-teal: #2F8596;
+  --gw-owner-plum: #8A5A9E;
+  --gw-owner-rose: #B24E73;
+  --gw-owner-slate: #5F7285;
+  --gw-owner-olive: #6F8A3D;
+  --gw-status-warning-text: #9A5B00;
+  --gw-status-warning-icon: #B26A00;
+  --gw-status-danger: #B42318;
+  --gw-status-warning-bg: color-mix(in srgb, var(--gw-status-warning-text) 7%, var(--gw-surface));
+  --gw-status-danger-bg: color-mix(in srgb, var(--gw-status-danger) 6%, var(--gw-surface));
+  --gw-status-neutral: var(--gw-text-muted);
+  --gw-backdrop: rgb(28 27 25 / 34%);
+  /* A hard one-pixel chart grid, not a decorative color gradient. */
+  --gw-chart-grid: linear-gradient(to right, var(--gw-border) 1px, transparent 1px);
+  --gw-avatar-outline: rgb(28 27 25 / 40%);
+  --gw-avatar-visor: rgb(28 27 25 / 55%);
+  --gw-shadow-none: none;
+  --gw-shadow-overlay: 0 2px 8px rgb(28 27 25 / 8%);
+  --gw-focus-ring: 0 0 0 2px var(--gw-focus-color);
+  --gw-focus: 2px solid var(--gw-focus-color);
+  --gw-font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --gw-font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --gw-activity-level-0: #EDF0F4;
+  --gw-activity-level-1: #E0E1FF;
+  --gw-activity-level-2: #B7B8FA;
+  --gw-activity-level-3: #8587ED;
+  --gw-activity-level-4: #4B4DE2;
+  --gw-activity-stat-min: 128px;
+  --gw-my-work-search-width: 160px;
+  --gw-activity-cell: 12px;
+  --gw-activity-chart-height: 112px;
+  --gw-activity-details-max: 220px;
+  --gw-my-work-view-height: 520px;
+  --gw-my-work-details-width: 400px;
+  --gw-files-preview-min-width: 220px;
+  --gw-files-explorer-min-width: 160px;
+  --gw-files-explorer-drawer-max-width: 320px;
+  --gw-files-compact-width: 440px;
+  --gw-type-caption: 11px;
+  --gw-type-meta: 12px;
+  --gw-type-body: 13px;
+  --gw-type-label: 14px;
+  --gw-type-section: 16px;
+  --gw-type-page: 20px;
+  --gw-leading-meta: 16px;
+  --gw-leading-body: 20px;
+  --gw-leading-label: 20px;
+  --gw-leading-section: 24px;
+  --gw-leading-page: 28px;
+  --gw-leading-tight: 1;
+  --gw-leading-prose: 1.5;
+  --gw-weight-regular: 400;
+  --gw-weight-medium: 500;
+  --gw-weight-semibold: 600;
+  --gw-tracking-body: 0;
+  --gw-tracking-heading: -0.01em;
+  --gw-space-0: 0px;
+  --gw-space-1: 4px;
+  --gw-space-2: 8px;
+  --gw-space-3: 12px;
+  --gw-space-4: 16px;
+  --gw-space-5: 20px;
+  --gw-space-6: 24px;
+  --gw-space-7: 28px;
+  --gw-space-8: 32px;
+  --gw-space-9: 36px;
+  --gw-space-10: 40px;
+  --gw-space-11: 44px;
+  --gw-space-12: 48px;
+  --gw-space-13: 52px;
+  --gw-space-14: 56px;
+  --gw-space-15: 60px;
+  --gw-space-16: 64px;
+  --gw-space-17: 68px;
+  --gw-space-18: 72px;
+  --gw-space-19: 76px;
+  --gw-space-20: 80px;
+  --gw-space-21: 84px;
+  --gw-space-34: 136px;
+  /* Existing native/layout reservations: preserve their physical geometry. */
+  --gw-native-traffic-inset: 78px;
+  --gw-native-controls-inset: 148px;
+  --gw-content-inset-max: 190px;
+  --gw-branch-menu-header-offset: 130px;
+  /* Optical offsets/negative margins preserve alignment without changing panes. */
+  --gw-hairline: 1px;
+  --gw-optical-offset: 2px;
+  --gw-radius-sm: 8px;
+  --gw-radius-md: 8px;
+  --gw-radius-lg: 16px;
+  --gw-radius-navigation: var(--gw-radius-sm);
+  --gw-radius-composer: 24px;
+  --gw-nav-icon-active: var(--gw-text);
+  --gw-nav-icon-hover: var(--gw-text);
+  --gw-nav-icon-inactive: #7C8288;
+  --gw-nav-selected: var(--gw-selected);
+  --gw-nav-selected-hover: var(--gw-nav-selected);
+  --gw-nav-hover: var(--gw-hover);
+  --gw-nav-pressed: var(--gw-pressed);
+  --gw-nav-control-size: 40px;
+  --gw-nav-control-radius: 12px;
+  /* Rail-only palette: contextual sidebars retain their existing surfaces. */
+  --gw-sidebar-panel: #F8FAFB;
+  --gw-sidebar-toolbar: #E9EFF4;
+  --gw-sidebar-ink: #34383B;
+  --gw-sidebar-secondary: #4F565D;
+  --gw-sidebar-icon: #8A9095;
+  --gw-sidebar-line: #E0E5E8;
+  --gw-sidebar-hover: #EDF0F2;
+  --gw-sidebar-selected: #E7ECEF;
+  --gw-sidebar-pressed: #DFE6EA;
+  --gw-sidebar-overlay: #FFFFFF;
+  --gw-sidebar-backdrop: rgb(31 40 48 / 18%);
+  --gw-sidebar-shadow: 0 4px 18px rgb(31 40 48 / 10%);
+  --gw-inbox-search-max-height: 384px;
+  --gw-inbox-navigator-width: 270px;
+  --gw-inbox-heading-size: 15px;
+  --gw-sidebar-heading-size: 18px;
+  --gw-sidebar-row-height: 36px;
+  --gw-sidebar-section-height: 36px;
+  --gw-sidebar-title-delay: 550ms;
+  --gw-sidebar-preview-delay: 320ms;
+  --gw-sidebar-preview-width: 300px;
+  --gw-sidebar-menu-width: 224px;
+  --gw-sidebar-dialog-width: 464px;
+  --gw-sidebar-collapse-motion: 150ms;
+  --gw-sidebar-compose-motion: 180ms;
+  --gw-sidebar-compose-dash: 16;
+  --gw-assistant-width: 392px;
+  --gw-chat-input-max: 200px;
+  --gw-chat-disabled-opacity: .45;
+  --gw-chat-user-surface: #EAF3FD;
+  --gw-assistant-input-height: 96px;
+  --gw-rail-surface: #ECF1F4;
+  --gw-rail-selected: #E0E5E9;
+  --gw-rail-selected-hover: #DCE2E7;
+  --gw-rail-hover: #E4E9ED;
+  --gw-rail-pressed: #D8DFE5;
+  --gw-rail-icon: #858B90;
+  --gw-rail-icon-hover: #535A60;
+  --gw-rail-icon-active: #1A1C1F;
+  --gw-rail-disabled: #A5ADB3;
+  --gw-rail-divider: #DBDEE1;
+  --gw-rail-tooltip-bg: #1A1C1F;
+  --gw-rail-tooltip-text: #FFFFFF;
+  --gw-rail-focus: 2px solid #535A60;
+  --gw-rail-tile: 44px;
+  --gw-rail-artwork: 20px;
+  --gw-rail-tooltip-max: 240px;
+  --gw-rail-tooltip-delay: 200ms;
+  --gw-rail-tooltip-exit: 120ms;
+  --gw-rail-tooltip-layer: 1100;
+  --gw-icon-muted: var(--gw-nav-icon-inactive);
+  --gw-highlight: var(--gw-selected);
+  --gw-radius-round: 50%;
+  --gw-radius-pill: 999px;
+  --gw-radius: var(--gw-radius-md);
+  --gw-icon-sm: 16px;
+  --gw-icon-md: 20px;
+  --gw-control-compact: 28px;
+  --gw-control-default: 32px;
+  --gw-control-form: 36px;
+  --gw-row-compact: 32px;
+  --gw-row-standard: 40px;
+  --gw-row-message: 48px;
+  --gw-preview-focus-delay: 120ms;
+  --gw-preview-exit-delay: 120ms;
+  --gw-preview-delay: 400ms;
+  --gw-preview-layer: 1000;
+  --gw-motion-fast: 150ms;
+  --gw-motion-expand: 150ms;
+  --gw-motion-data: 0ms;
+  --gw-motion-running: 900ms;
+  --gw-ease-out: ease-out;
+  --gw-ease-linear: linear;
+  /* Compatibility names keep existing components and interaction wiring intact. */
+  --gw-accent: var(--gw-action-bg);
+  --gw-accent-strong: var(--gw-brand-indigo);
+  --gw-status-warning: var(--gw-status-warning-text);
+  --bg: var(--gw-bg);
+  --sidebar: var(--gw-sidebar);
+  --sidebar-soft: var(--gw-surface-muted);
+  --line: var(--gw-border);
+  --line-strong: var(--gw-border-control);
+  --text: var(--gw-text);
+  --muted: var(--gw-text-muted);
+  --dim: var(--gw-text-muted);
+  --bubble: var(--gw-surface-muted);
+  --orange: var(--gw-text);
+  --green: var(--gw-status-neutral);
+  --red: var(--gw-status-danger);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --gw-motion-fast: 0ms;
+    --gw-motion-expand: 0ms;
+    --gw-motion-running: 0ms;
+    --gw-sidebar-collapse-motion: 0ms;
+    --gw-sidebar-compose-motion: 0ms;
+  }
+}
+
+/* Conversation UI only; these do not replace the application theme. */
+:root {
+  --gw-conversation-canvas: #FFFFFF;
+  --gw-conversation-ink: #1A1C1F;
+  --gw-conversation-secondary: #535A60;
+  --gw-conversation-bubble: #EAF3FD;
+  --gw-conversation-context: #F2F3F3;
+  --gw-conversation-line: #E5E7E9;
+  --gw-conversation-accent: #6366F1;
+  --gw-conversation-width: 800px;
+  --gw-conversation-body: 15px;
+  --gw-conversation-leading: 24px;
+  --gw-conversation-input: 14px;
+  --gw-conversation-greeting: 28px;
+  --gw-conversation-logo-size: 52px;
+  --gw-conversation-welcome-gap: 28px;
+  --gw-conversation-greeting-leading: 36px;
+  --gw-conversation-radius: 24px;
+  --gw-conversation-bubble-radius: 20px;
+  --gw-thinking-phrase-width: 260px;
+  --gw-thinking-cycle: 3600ms;
+}
+:root { --gw-conversation-error-max: 160px; }
+
+:root {
+  --gw-message-user-ink: #183452;
+  --gw-message-radius: 18px;
+  --gw-message-body: 15px;
+  --gw-message-leading: 24px;
+  --gw-message-compact-body: 13px;
+  --gw-message-compact-leading: 20px;
+  --gw-message-heading: 16px;
+  --gw-message-inline-code: 13px;
+  --gw-user-preview-height: 216px;
+  --gw-user-compact-preview-height: 160px;
+  --gw-message-thumbnail: 80px;
+  --gw-message-thumbnail-radius: 12px;
+  --gw-message-compact-thumbnail: 64px;
+  --gw-message-viewer-width: 1080px;
+  --gw-message-viewer-height: 800px;
+  --gw-message-menu-width: 248px;
+  --gw-message-preview-fade: linear-gradient(transparent, var(--gw-conversation-bubble));
+}
+
+/* Phase 8 composer geometry at normal application scale. */
+:root {
+  --gw-composer-input-min: 32px;
+  --gw-composer-input-max: 200px;
+  --gw-composer-height: 100px;
+  --gw-composer-context-height: 36px;
+  --gw-composer-control-max: 180px;
+  --gw-composer-label-narrow: 96px;
+}
+
+/* Professional List geometry. */
+:root {
+ --gw-list-narrow: 700px; --gw-list-minimal: 440px;
+ --gw-list-check: 32px; --gw-list-status: 28px; --gw-list-title-min: 120px; --gw-list-more: 36px;
+ --gw-list-assignee-width: 144px; --gw-list-priority-width: 72px; --gw-list-dueDate-width: 76px;
+ --gw-list-project-width: 128px; --gw-list-schedule-width: 100px; --gw-list-attention-width: 120px;
+ --gw-list-row-default: 48px; --gw-list-avatar: 24px; --gw-list-header: 32px;
+}
+
+:root { --gw-list-focus-width: 2px; }
+
+/* Board Part 3 geometry, neutral surfaces reuse the approved palette. */
+:root {
+ --gw-board-column-width: 288px; --gw-board-column-collapsed: 200px;
+ --gw-board-radius: 10px; --gw-board-column-radius: 12px;
+ --gw-board-drop-min: 64px; --gw-board-avatar: 24px;
+ --gw-board-scroll-edge: 56px; --gw-board-scroll-step: 10px;
+ --gw-board-title-leading: 20px; --gw-board-card-opacity: .55;
+}
+
+:root { --gw-board-border-hover: color-mix(in srgb, var(--gw-border-control) 40%, var(--gw-border)); }
+
+/* Operational Calendar geometry. */
+:root {
+ --gw-calendar-compact: 720px; --gw-calendar-month-min: 630px; --gw-calendar-week-min: 840px;
+ --gw-calendar-month-day: 132px; --gw-calendar-week-day: 240px;
+ --gw-calendar-unscheduled-max: 120px; --gw-calendar-unscheduled-row: 40px;
+ --gw-calendar-owner-width: 120px; --gw-calendar-day-dialog: 560px; --gw-calendar-dialog-max: 640px;
+ --gw-calendar-layer: 9000;
+}
+
+:root { --gw-calendar-unscheduled-compact: 80px; --gw-calendar-grid-min: 160px; }
+
+:root {
+  --gw-schedule-detail-width: 360px;
+  --gw-schedule-filter-width: 180px;
+  --gw-schedule-nav-width: 248px;
+  --gw-schedule-compact-nav-width: 216px;
+  --gw-schedule-content-width: 760px;
+  --gw-schedule-dialog-width: 520px;
+  --gw-schedule-textarea-height: 152px;
+  --gw-schedule-empty-offset: 12vh;
+  --gw-schedule-stack-breakpoint: 520px;
+}
+
+:root {
+  --gw-schedule-card-border: #EDEEF0;
+  --gw-schedule-card-height: 112px;
+  --gw-schedule-card-title: 15px;
+  --gw-schedule-clock-size: 40px;
+  --gw-schedule-welcome-offset: 8vh;
+}
+
+/* Icon theme contract. The current product has no persisted theme selector. */
+[data-theme="dark"] {
+ color-scheme:dark;
+ --gw-text:#E6E8EB; --gw-text-muted:#BBC1C8; --gw-text-secondary-strong:#D1D6DC;
+ --gw-text-disabled:#757C85; --gw-surface:#202327; --gw-bg:#191C20; --gw-sidebar:#20252A;
+ --gw-surface-muted:#282D33; --gw-border:#373D44; --gw-border-control:#747D87;
+ --gw-hover:#30373F; --gw-selected:#343D47; --gw-pressed:#3D4651;
+ --gw-nav-icon-inactive:#B2BAC4; --gw-nav-icon-active:#F2F4F7; --gw-nav-icon-hover:#FFFFFF;
+ --gw-nav-selected:#343D47; --gw-nav-hover:#2D343D; --gw-nav-pressed:#3D4651;
+ --gw-rail-surface:#20252A; --gw-rail-selected:#343D47; --gw-rail-selected-hover:#3B4550;
+ --gw-rail-hover:#2D343D; --gw-rail-disabled:#757C85;
+ --gw-status-danger:#FFB4AB; --gw-status-warning-text:#F3CC81;
+ --gw-conversation-secondary:var(--gw-text-muted);
+}
+
+/* Saved Views geometry; surfaces and paint reuse shared theme tokens. */
+:root { --gw-views-directory-max: 1040px; --gw-views-search-width: 220px; --gw-views-filter-top: 164px; --gw-views-filter-width: 400px; --gw-views-dialog-max-height: 80vh; --gw-views-dialog-width: 600px; --gw-views-workspace-min: 360px; --gw-views-record-height: 60vh; --gw-views-details-width: 400px; }
+
+:root { --gw-views-popover-layer: 40; --gw-views-modal-layer: 100; }
+
+:root { --gw-list-updatedAt-width: 100px; }
+
+/* Shared desktop semantic palette. Alias values are concrete here to avoid
+   cycles in legacy surfaces which rebind their local semantic names. */
+:root {
+ --gw-bg:#FFFFFF; --gw-surface:#FFFFFF; --gw-sidebar:#F7F8FA;
+ --gw-surface-muted:#F0F2F4; --gw-border:#E6E8EB; --gw-border-control:#969BA3;
+ --gw-text:#292B30; --gw-text-muted:#454B54; --gw-text-secondary-strong:#454B54;
+ --gw-hover:#F0F2F4; --gw-selected:#E8EBEF; --gw-pressed:#DFE3E8;
+ --gw-action-bg:#292B30; --gw-action-fg:#FFFFFF; --gw-action-hover:#15171B;
+ --gw-sidebar-panel:#F7F8FA; --gw-sidebar-toolbar:#F0F2F4; --gw-sidebar-ink:#292B30;
+ --gw-sidebar-secondary:#454B54; --gw-sidebar-line:#E6E8EB;
+ --gw-sidebar-hover:#F0F2F4; --gw-sidebar-selected:#E8EBEF; --gw-sidebar-pressed:#DFE3E8;
+ --gw-conversation-canvas:#FFFFFF; --gw-conversation-ink:#292B30; --gw-conversation-secondary:#454B54;
+ --gw-conversation-context:#F7F8FA; --gw-conversation-line:#E6E8EB;
+ --gw-dashboard-canvas:#FFFFFF; --gw-dashboard-hover:#F0F2F4; --gw-dashboard-selected:#E8EBEF;
+ --gw-library-ink:#292B30; --gw-library-border:#E6E8EB; --gw-library-selection:#F0F2F4;
+}
+[data-theme="dark"] {
+ --gw-bg:#191C20; --gw-surface:#202327; --gw-sidebar:#20252A;
+ --gw-surface-muted:#282D33; --gw-border:#373D44; --gw-border-control:#747D87;
+ --gw-text:#E6E8EB; --gw-text-muted:#BBC1C8; --gw-text-secondary-strong:#BBC1C8;
+ --gw-hover:#30373F; --gw-selected:#343D47; --gw-pressed:#3D4651;
+ --gw-action-bg:#E6E8EB; --gw-action-fg:#191C20; --gw-action-hover:#FFFFFF;
+ --gw-sidebar-panel:#202327; --gw-sidebar-toolbar:#20252A; --gw-sidebar-ink:#E6E8EB;
+ --gw-sidebar-secondary:#BBC1C8; --gw-sidebar-icon:#B2BAC4; --gw-sidebar-line:#373D44;
+ --gw-sidebar-hover:#30373F; --gw-sidebar-selected:#343D47; --gw-sidebar-pressed:#3D4651;
+ --gw-sidebar-overlay:#202327;
+ --gw-conversation-canvas:#202327; --gw-conversation-ink:#E6E8EB; --gw-conversation-secondary:#BBC1C8;
+ --gw-conversation-context:#282D33; --gw-conversation-line:#373D44;
+ --gw-dashboard-canvas:#202327; --gw-dashboard-hover:#30373F; --gw-dashboard-selected:#343D47;
+ --gw-library-ink:#E6E8EB; --gw-library-border:#373D44; --gw-library-selection:#343D47;
+}
+
+:root {--gw-terminal-bg:#191C20;--gw-terminal-ink:#E6E8EB;}
+
+:root {--gw-space-24:96px;--gw-rail-focus:var(--gw-focus);}
+[data-theme="dark"] {--gw-rail-icon:#B2BAC4;--gw-rail-icon-active:#F2F4F7;--gw-rail-icon-hover:#FFFFFF;--gw-rail-divider:#373D44;--gw-rail-pressed:#3D4651;--gw-rail-focus:var(--gw-focus);}
+
+:root {--gw-pdf-paper:#FFFFFF;}
+:root {--gw-font-sans:"Geist",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;--gw-font-wordmark:"Manrope",var(--gw-font-sans);}
+
+/* Settings composition geometry. */
+:root {--gw-settings-nav-width:200px;--gw-settings-content-width:760px;--gw-settings-input-width:280px;--gw-settings-select-width:160px;}
+
+:root {--gw-settings-feedback-height:64px;--gw-settings-save-width:112px;}
+
+/* Human workforce directory geometry. */
+:root {--gw-workforce-search:220px;--gw-workforce-filter:160px;--gw-workforce-filter-min:140px;--gw-workforce-details:360px;--gw-workforce-card:220px;--gw-workforce-row:52px;--gw-workforce-empty:280px;--gw-workforce-description:96px;--gw-workforce-details-layer:10;}
+
+:root {--gw-workforce-dialog:480px;--gw-workforce-card-height:156px;}
+
+/* Global visual system: brand expresses intent/selection, never execution status. */
+:root {
+ --gw-brand-primary:var(--gw-brand-indigo);
+ --gw-brand-hover:color-mix(in srgb,var(--gw-brand-indigo) 88%,black);
+ --gw-brand-pressed:color-mix(in srgb,var(--gw-brand-indigo) 76%,black);
+ --gw-brand-subtle:color-mix(in srgb,var(--gw-brand-indigo) 7%,var(--gw-surface));
+ --gw-brand-border:color-mix(in srgb,var(--gw-brand-indigo) 28%,var(--gw-border));
+ --gw-brand-foreground:#FFFFFF;
+ --gw-brand-link:var(--gw-brand-indigo);
+ --gw-brand-focus:var(--gw-brand-primary);
+ --gw-canvas:var(--gw-conversation-canvas);
+ --gw-surface-elevated:var(--gw-surface);
+ --gw-text-inverse:var(--gw-brand-foreground);
+ --gw-border-subtle:var(--gw-border);
+ --gw-border-interactive:var(--gw-border-control);
+ --gw-status-success:#237245;
+ --gw-status-info:var(--gw-brand-link);
+ --gw-control-disabled-bg:var(--gw-surface-muted);
+ --gw-control-disabled-ink:var(--gw-text-muted);
+ --gw-focus-color:var(--gw-brand-focus);
+ --gw-link:var(--gw-brand-link);
+ --gw-conversation-bubble:var(--gw-brand-subtle);
+ --gw-message-user-ink:var(--gw-text);
+ --gw-response-body:var(--gw-message-body);
+ --gw-response-leading:var(--gw-message-leading);
+ --gw-response-width:800px;
+ --gw-response-h1:20px;
+ --gw-response-h2:15px;
+ --gw-response-h3:13px;
+}
+[data-theme="dark"] {
+ --gw-brand-primary:color-mix(in srgb,var(--gw-brand-indigo) 55%,white);
+ --gw-brand-hover:color-mix(in srgb,var(--gw-brand-indigo) 45%,white);
+ --gw-brand-pressed:color-mix(in srgb,var(--gw-brand-indigo) 65%,white);
+ --gw-brand-link:var(--gw-brand-primary);
+ --gw-brand-foreground:#191C20;
+ --gw-brand-subtle:color-mix(in srgb,var(--gw-brand-indigo) 18%,var(--gw-surface));
+ --gw-brand-border:color-mix(in srgb,var(--gw-brand-primary) 32%,var(--gw-border));
+ --gw-conversation-bubble:var(--gw-brand-subtle);
+ --gw-message-user-ink:var(--gw-text);
+ --gw-status-success:#8ECFA9;
+ --gw-status-warning-text:#F2C66D;
+ --gw-status-danger:#FF9A91;
+}
+
+/* Primary actions and selection are deliberately independent of the AI accent. */
+:root { --gw-primary-button:var(--gw-action-bg); --gw-primary-button-foreground:var(--gw-action-fg); --gw-primary-button-hover:var(--gw-action-hover); --gw-primary-button-pressed:var(--gw-action-bg); --gw-toggle-checked:var(--gw-brand-primary); --gw-toggle-thumb:var(--gw-brand-foreground); }
+
+:root { --gw-user-message-surface: color-mix(in srgb, var(--gw-brand-indigo) 3%, var(--gw-conversation-canvas)); }
+[data-theme="dark"] { --gw-user-message-surface: color-mix(in srgb, var(--gw-brand-indigo) 10%, var(--gw-conversation-canvas)); }
+
+/* Authentication stays light even when the local workspace uses dark appearance. */
+:root { --gw-auth-width:384px; --gw-auth-heading:28px; --gw-auth-heading-leading:36px; --gw-auth-code-size:28px; --gw-auth-background:#FFFFFF; --gw-auth-ink:#202226; --gw-auth-secondary:#51555C; --gw-auth-border:#D8DBE0; --gw-auth-hover:#F5F6F8; --gw-auth-button-hover:#373A40; }
+
+/* Stage A: authentication-only presentation and strength guidance. */
+:root {
+ --gw-auth-width:380px;
+ --gw-auth-background:#FAFAF8;
+ --gw-auth-grid:rgba(32,34,38,.15);
+ --gw-auth-grid-size:24px;
+ --gw-auth-grid-dot:1px;
+ --gw-auth-focus-border:color-mix(in srgb,var(--gw-accent) 55%,var(--gw-auth-border));
+ --gw-auth-focus-ring:0 0 0 3px rgba(66,84,230,.14);
+ --gw-auth-transition:120ms;
+ --gw-auth-error-border:color-mix(in srgb,var(--gw-status-danger) 55%,var(--gw-auth-border));
+ --gw-auth-strength-good:#53826C;
+ --gw-auth-strength-neutral:#D8DBE0;
+ --gw-auth-strength-height:4px;
+}

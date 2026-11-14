@@ -1,0 +1,31 @@
+/* Frame styling only: saved SVG geometry, appearance and status mapping stay in DoatAvatar. */
+.gwira-doat-avatar {
+  display: grid;
+  flex: none;
+  min-width: 0;
+  align-content: start;
+  gap: var(--gw-space-1);
+}
+.gwira-doat-avatar > svg,
+.gwira-doat-avatar > img {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border: var(--gw-hairline) solid var(--gw-border);
+  border-radius: var(--gw-radius-md);
+  background: var(--gw-surface-muted);
+}
+.gwira-doat-avatar__status {
+  min-width: 0;
+  margin: 0;
+  color: var(--gw-text-secondary-strong);
+  font-size: var(--gw-type-meta);
+  line-height: var(--gw-leading-meta);
+  font-weight: var(--gw-weight-medium);
+  overflow-wrap: anywhere;
+}
+
+.gwira-doat-avatar > img { object-fit:cover; }

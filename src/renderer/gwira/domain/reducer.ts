@@ -8,6 +8,7 @@ import type { LocalOnboardingState } from '../onboarding/onboardingModel.js';
 export type GwiraCommand =
   | { type: 'RENAME_WORKSPACE'; name: string; at: string; activityId: string }
   | { type: 'ADD_PERSON'; person: Person }
+  | { type: 'UPDATE_PERSON'; personId: string; workspaceId: string; name: string; role: string }
   | { type: 'ADD_AGENT'; agent: Agent }
   | { type: 'ADD_DOAT'; doat: DoatRecord; activityId: string; at: string }
   | { type: 'UPDATE_DOAT'; doat: DoatRecord; activityId: string; at: string }
@@ -15,7 +16,7 @@ export type GwiraCommand =
   | { type: 'SET_ONBOARDING'; onboarding: LocalOnboardingState }
   | { type: 'ADD_PROJECT'; project: BusinessProject; activityId: string }
   | { type: 'CREATE_TASK'; task: Task; activityId: string }
-  | { type: 'UPDATE_TASK'; taskId: string; title?: string; description?: string; priority?: TaskPriority; dueDate?: string | null; assignee?: Assignee | null; at: string; activityId: string }
+  | { type: 'UPDATE_TASK'; taskId: string; title?: string; description?: string | null; priority?: TaskPriority; dueDate?: string | null; assignee?: Assignee | null; at: string; activityId: string }
   | { type: 'SET_TASK_DEPENDENCIES'; taskId: string; dependsOnTaskIds: string[]; at: string; activityId: string }
   | { type: 'TRANSITION_TASK'; taskId: string; status: TaskStatus; at: string; activityId: string; actor?: Assignee }
   | { type: 'ADD_COMMENT'; comment: TaskComment; activityId: string }
@@ -52,6 +53,10 @@ export function reduceGwira(state: GwiraLocalState, command: GwiraCommand): Gwir
     case 'ADD_PERSON':
       return command.person.workspaceId === state.workspace.id && !state.people.some((item) => item.id === command.person.id)
         ? { ...state, people: [...state.people, command.person] } : state;
+    case 'UPDATE_PERSON': {
+      if (command.workspaceId !== state.workspace.id || !command.name.trim() || !command.role.trim() || command.name.trim().length > 200 || command.role.trim().length > 200) return state;
+      return { ...state, people: state.people.map(person => person.id === command.personId && person.workspaceId === state.workspace.id ? { ...person, name: command.name.trim(), role: command.role.trim() } : person) };
+    }
     case 'ADD_AGENT':
       return command.agent.workspaceId === state.workspace.id && command.agent.type === 'coding' && !state.agents.some((item) => item.id === command.agent.id)
         ? { ...state, agents: [...state.agents, command.agent] } : state;

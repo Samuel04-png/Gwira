@@ -1,0 +1,58 @@
+/* Scope to adopted controls; legacy inputs keep their existing layout. */
+.gw-input[data-gw-input] {
+  box-sizing: border-box;
+  display: block;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  height: var(--gw-control-form);
+  min-height: var(--gw-control-form);
+  margin: 0;
+  padding: 0 var(--gw-space-3);
+  border: var(--gw-hairline) solid var(--gw-border-control);
+  border-radius: var(--gw-radius-md);
+  background: var(--gw-surface);
+  color: var(--gw-text);
+  font-family: var(--gw-font-sans);
+  font-size: var(--gw-type-body);
+  font-weight: var(--gw-weight-regular);
+  line-height: var(--gw-leading-body);
+  letter-spacing: var(--gw-tracking-body);
+  box-shadow: var(--gw-shadow-none);
+  opacity: 1;
+  transition: border-color var(--gw-motion-fast) var(--gw-ease-out),
+    background-color var(--gw-motion-fast) var(--gw-ease-out);
+}
+.gw-input[data-gw-input]::placeholder { color: var(--gw-text-muted); opacity: 1; }
+.gw-input[data-gw-input]:hover:not(:disabled):not([readonly]):not([aria-invalid='true']) { border-color: var(--gw-text-muted); }
+.gw-input[data-gw-input]:active:not(:disabled):not([readonly]) { background: var(--gw-hover); }
+.gw-input[data-gw-input]:focus-visible { outline: var(--gw-focus); outline-offset: var(--gw-optical-offset); }
+.gw-input[data-gw-input]::selection { color: var(--gw-text); background: var(--gw-selected); }
+.gw-input[data-gw-input][aria-invalid='true'] { border-color: var(--gw-status-danger); }
+.gw-input[data-gw-input][readonly] { background: var(--gw-surface-muted); }
+.gw-input[data-gw-input]:disabled {
+  color: var(--gw-text-disabled);
+  background: var(--gw-surface-muted);
+  border-color: var(--gw-border);
+  cursor: not-allowed;
+  opacity: 1;
+}
+.gw-field[data-gw-field] {
+  display: grid;
+  min-width: 0;
+  align-content: start;
+  gap: var(--gw-space-2);
+  margin: 0;
+  color: var(--gw-text);
+  font-family: var(--gw-font-sans);
+  font-size: var(--gw-type-meta);
+  line-height: var(--gw-leading-meta);
+  letter-spacing: var(--gw-tracking-body);
+}
+.gw-field__label { font-weight: var(--gw-weight-medium); overflow-wrap: anywhere; }
+.gw-field__description, .gw-field__error { font-weight: var(--gw-weight-regular); overflow-wrap: anywhere; }
+.gw-field__description { color: var(--gw-text-secondary-strong); }
+.gw-field__error { color: var(--gw-status-danger); }
+@media (prefers-reduced-motion: reduce) {
+  .gw-input[data-gw-input] { transition: none; }
+}

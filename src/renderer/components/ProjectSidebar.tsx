@@ -1,31 +1,28 @@
+import { AgentActivityIndicator } from './StatusIndicator.js';
+import { primaryNavigationSelection } from './iconModel.js';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { CodexSession, CodexThreadHistory } from '../../shared/types.js';
-import { getProjectThreadRows } from '../projectThreads.js';
 import type { ProjectEntry } from '../projects.js';
-import { DeleteThreadIcon, FolderIcon, FolderOpenIcon, FolderPlusIcon, NewThreadIcon, SearchIcon } from './Icons.js';
+import { getProjectThreadRows } from '../projectThreads.js';
+import { type WorkspaceNavigation, type WorkspaceRoute } from '../navigationTypes.js';
+export type { WorkspaceNavigation } from '../navigationTypes.js';
+import { orderSidebarItems, moveSidebarItem, readSidebarPreferences, visibleSidebarItems, remapSidebarKeys, type SidebarSection, type SidebarPreferences } from '../sidebarModel.js';
+import { Icon, NavigationIcon, ThreadSpinner, FolderIcon, FolderOpenIcon, NewThreadIcon } from './Icon.js';
+import { PrimaryRail } from './PrimaryRail.js';
+import {WorkspaceToolsNavigation,workspaceToolRoutes} from './WorkspaceToolsNavigation.js';
+import { HomeSidebarContent } from './HomeSidebarContent.js';
+import { ItemTitle } from './ItemTitle.js';
+import { SidebarContextMenu } from './SidebarContextMenu.js';
+import { ProjectCreateDialog } from './ProjectCreateDialog.js';
+import { SidebarSectionHeading } from './SidebarSectionHeading.js';
+import { SidebarConversationRow } from './SidebarConversationRow.js';
 
-/** Destinations are only enabled once their data-backed surface is available. */
-export type WorkspaceNavigation = 'home' | 'library' | 'dashboard' | 'inbox' | 'my-work' | 'organization' | 'teams' | 'agents' | 'doats' | 'integrations' | 'settings' | 'chat' | 'skills';
-
-type SidebarSection = 'favorites' | 'projects' | 'recent';
-type SidebarItem = { key: string; title: string; updatedAt: string; project: ProjectEntry; kind: 'history' | 'session'; history?: CodexThreadHistory; session?: CodexSession };
-type SidebarSort = 'updated' | 'created' | 'name';
-type SidebarMenu = { section: SidebarSection; panel: 'root' | 'organize' | 'sort' } | undefined;
-type SidebarMenuPreferences = { pinnedSort: 'updated' | 'manual'; projectSort: SidebarSort; recentSort: SidebarSort; recentShowProjects: boolean };
-
-const sidebarSectionsStorageKey = 'gwira.sidebar.sections.v2';
-const sidebarFavoritesStorageKey = 'gwira.sidebar.favorites.v1';
-const sidebarRecentStorageKey = 'gwira.sidebar.recent-access.v1';
-const sidebarMenuStorageKey = 'gwira.sidebar.menu-preferences.v1';
-const sidebarPinnedOrderStorageKey = 'gwira.sidebar.pinned-order.v1';
-
-function readObjectStorage(key: string): Record<string, string | boolean> {
-  try { const stored = JSON.parse(localStorage.getItem(key) ?? '{}'); return stored && typeof stored === 'object' ? stored as Record<string, string | boolean> : {}; } catch { return {}; }
-}
-function readStringArrayStorage(key: string): string[] { try { const value = JSON.parse(localStorage.getItem(key) ?? '[]'); return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []; } catch { return []; } }
-
-function historyItemKey(projectId: string, historyId: string): string { return `history:${projectId}:${historyId}`; }
-function sessionItemKey(projectId: string, sessionId: string): string { return `session:${projectId}:${sessionId}`; }
+type SidebarItem = { key: string; title: string; updatedAt: string; createdAt: string; project: ProjectEntry; kind: 'history' | 'session'; history?: CodexThreadHistory; session?: CodexSession; active: boolean; running: boolean };
+type SidebarMenu = { section: SidebarSection; panel: 'root' | 'organize' | 'sort' | 'show' } | undefined;
+function readStored<T>(key: string, fallback: T): T { try { return JSON.parse(localStorage.getItem(key) ?? 'null') ?? fallback; } catch { return fallback; } }
+function saveStored(key: string, value: unknown): void { try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* UI preferences remain usable for this session. */ } }
+function historyItemKey(projectId: string, id: string): string { return `history:${projectId}:${id}`; }
+function sessionItemKey(projectId: string, id: string): string { return `session:${projectId}:${id}`; }
 function normalizeSidebarTitle(value: string | undefined): string {
   let title = value?.trim() ?? '';
   if (!title) return 'Untitled conversation';
@@ -41,10 +38,13 @@ function normalizeSidebarTitle(value: string | undefined): string {
   return title;
 }
 function compactSessionTitle(session: CodexSession): string { return normalizeSidebarTitle(session.messages.find((message) => message.role === 'user')?.text); }
-function sortSidebarItems(items: SidebarItem[], sort: SidebarSort): SidebarItem[] { return [...items].sort((left, right) => sort === 'name' ? left.title.localeCompare(right.title) : Date.parse(sort === 'created' ? right.history?.createdAt ?? right.session?.startedAt ?? right.updatedAt : right.updatedAt) - Date.parse(sort === 'created' ? left.history?.createdAt ?? left.session?.startedAt ?? left.updatedAt : left.updatedAt)); }
 
 interface ProjectSidebarProps {
   dashboardSidebar?: React.ReactNode;
+  workspaceToolsTarget?: React.Ref<HTMLDivElement>;
+  workspaceToolsOpen?: boolean;
+  neutralRail?: boolean;
+  scheduleSidebarRef?: React.Ref<HTMLDivElement>;
   activeProject?: ProjectEntry;
   activeSession?: CodexSession;
   activeSessionId?: string;
@@ -55,15 +55,14 @@ interface ProjectSidebarProps {
   sessionsForProject: (project: ProjectEntry) => CodexSession[];
   formatRelativeTime: (iso: string) => string;
   onAddProject: () => void;
+  onCreateProject: (name: string, path: string) => void;
   onDeleteHistory: (event: React.MouseEvent<HTMLButtonElement>, project: ProjectEntry, history: CodexThreadHistory) => void;
   onNewThread: (project?: ProjectEntry) => void;
   onOpenHistory: (project: ProjectEntry, history: CodexThreadHistory) => void;
   onOpenSession: (project: ProjectEntry, session: CodexSession) => void;
   onProjectKeyDown: (event: React.KeyboardEvent<HTMLElement>, action: () => void) => void;
-  canGoBack: boolean;
-  canGoForward: boolean;
-  onGoBack: () => void;
-  onGoForward: () => void;
+  collapsed: boolean;
+  overlay?: boolean;
   onSelectBusinessView: (view: Exclude<WorkspaceNavigation, 'home' | 'chat' | 'skills'>) => void;
   onOpenHome: () => void;
   onSelectSkills: () => void;
@@ -72,261 +71,144 @@ interface ProjectSidebarProps {
   openProjectMenuId?: string;
 }
 
-export function ProjectSidebar({
-  dashboardSidebar,
-  activeProject,
-  activeSession,
-  activeSessionId,
-  activeView,
-  expandedProjectIds,
-  historiesByProject,
-  projects,
-  sessionsForProject,
-  formatRelativeTime,
-  onAddProject,
-  onDeleteHistory,
-  onNewThread,
-  onOpenHistory,
-  onOpenSession,
-  onProjectKeyDown,
-  canGoBack,
-  canGoForward,
-  onGoBack,
-  onGoForward,
-  onSelectBusinessView,
-  onOpenHome,
-  onSelectSkills,
-  onToggleProject,
-  onToggleProjectMenu,
-  openProjectMenuId
-}: ProjectSidebarProps): React.ReactElement {
-  const [collapsed, setCollapsed] = useState(() => localStorage.getItem('gwira.sidebar.collapsed') === 'true');
-  // Library is a destination in its own right. Keep the context that opened it
-  // so Home and Workspace can both expose the same library without a redirect.
-  const [context, setContext] = useState<'home' | 'workspace'>(() => activeView === 'home' || activeView === 'chat' ? 'home' : 'workspace');
-  const [moreOpen, setMoreOpen] = useState(false);
-  const [sectionExpanded, setSectionExpanded] = useState<Record<SidebarSection, boolean>>(() => {
-    const saved = readObjectStorage(sidebarSectionsStorageKey);
-    return { favorites: saved.favorites !== false, projects: saved.projects === true, recent: saved.recent === true };
+
+/** Freeze row ordering while a pointer is inside the sidebar; keep data current. */
+function useStableSidebarRows(items: SidebarItem[], locked: boolean): SidebarItem[] {
+  const order = useRef<string[]>([]);
+  if (!locked) order.current = items.map(item => item.key);
+  const rank = new Map(order.current.map((key, index) => [key, index]));
+  const incoming = new Map(items.map((item,index) => [item.key,index]));
+  return locked ? [...items].sort((a,b) => (rank.get(a.key) ?? Infinity) - (rank.get(b.key) ?? Infinity) || (incoming.get(a.key) ?? 0) - (incoming.get(b.key) ?? 0)) : items;
+}
+
+export function ProjectSidebar({ workspaceToolsTarget,workspaceToolsOpen, neutralRail, scheduleSidebarRef, dashboardSidebar, activeProject, activeSession, activeSessionId, activeView, expandedProjectIds, historiesByProject, projects, sessionsForProject, formatRelativeTime, onAddProject, onCreateProject, onDeleteHistory, onNewThread, onOpenHistory, onOpenSession, onProjectKeyDown, collapsed, overlay = false, onSelectBusinessView, onOpenHome, onSelectSkills, onToggleProject, onToggleProjectMenu, openProjectMenuId }: ProjectSidebarProps): React.ReactElement {
+  const [sectionExpanded, setSectionExpanded] = useState<Record<SidebarSection, boolean>>(() => ({ favorites: true, projects: false, recent: false, ...readStored('gwira.sidebar.sections.v2', {}) }));
+  const [favoriteKeys, setFavoriteKeys] = useState<Set<string>>(() => new Set(Object.entries(readStored<Record<string, boolean>>('gwira.sidebar.favorites.v1', {})).filter(([,value]) => value === true).map(([key]) => key)));
+  const [preferences, setPreferences] = useState(() => readSidebarPreferences(readStored('gwira.sidebar.menu-preferences.v1', {})));
+  const [orders, setOrders] = useState<Record<SidebarSection, string[]>>(() => {
+    const saved = readStored<Record<string, unknown>>('gwira.sidebar.manual-orders.v1', {});
+    const strings = (value: unknown): string[] => Array.isArray(value) ? value.filter((key): key is string => typeof key === 'string') : [];
+    return { favorites: strings(saved.favorites ?? readStored('gwira.sidebar.pinned-order.v1', [])), projects: strings(saved.projects), recent: strings(saved.recent) };
   });
-  const [favoriteKeys, setFavoriteKeys] = useState<Set<string>>(() => new Set(Object.keys(readObjectStorage(sidebarFavoritesStorageKey)).filter((key) => readObjectStorage(sidebarFavoritesStorageKey)[key] === true)));
-  const [recentAccess, setRecentAccess] = useState<Record<string, string>>(() => Object.fromEntries(Object.entries(readObjectStorage(sidebarRecentStorageKey)).filter((entry): entry is [string, string] => typeof entry[1] === 'string')));
-  const [menuPreferences, setMenuPreferences] = useState<SidebarMenuPreferences>(() => {
-    const saved = readObjectStorage(sidebarMenuStorageKey);
-    return { pinnedSort: saved.pinnedSort === 'manual' ? 'manual' as const : 'updated' as const, projectSort: (saved.projectSort === 'created' || saved.projectSort === 'name' ? saved.projectSort : 'updated') as SidebarSort, recentSort: (saved.recentSort === 'created' || saved.recentSort === 'name' ? saved.recentSort : 'updated') as SidebarSort, recentShowProjects: saved.recentShowProjects !== false };
-  });
-  const [pinnedOrder, setPinnedOrder] = useState<string[]>(() => readStringArrayStorage(sidebarPinnedOrderStorageKey));
+  const [expandedLists, setExpandedLists] = useState<Record<string, boolean>>({});
+  const [pointerInside, setPointerInside] = useState(false);
   const [sidebarMenu, setSidebarMenu] = useState<SidebarMenu>();
   const [sidebarMenuPosition, setSidebarMenuPosition] = useState<{ top: number; left: number }>();
+  const [createProjectOpen, setCreateProjectOpen] = useState(false);
+  const createTriggerRef = useRef<HTMLElement | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const menuTriggerRef = useRef<HTMLButtonElement>(null);
   const menuFocusRequestedRef = useRef(false);
-  useEffect(() => { localStorage.setItem('gwira.sidebar.collapsed', String(collapsed)); }, [collapsed]);
-  useEffect(() => { localStorage.setItem(sidebarSectionsStorageKey, JSON.stringify(sectionExpanded)); }, [sectionExpanded]);
-  useEffect(() => { localStorage.setItem(sidebarFavoritesStorageKey, JSON.stringify(Object.fromEntries([...favoriteKeys].map((key) => [key, true])))); }, [favoriteKeys]);
-  useEffect(() => { localStorage.setItem(sidebarRecentStorageKey, JSON.stringify(recentAccess)); }, [recentAccess]);
-  useEffect(() => { localStorage.setItem(sidebarMenuStorageKey, JSON.stringify(menuPreferences)); }, [menuPreferences]);
-  useEffect(() => { localStorage.setItem(sidebarPinnedOrderStorageKey, JSON.stringify(pinnedOrder)); }, [pinnedOrder]);
+  const sidebarRef = useRef<HTMLElement>(null);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [context, setContext] = useState<'home' | 'business'>(() => activeView === 'home' || activeView === 'chat' || activeView === 'library' ? 'home' : 'business');
+  useEffect(() => { if (activeView === 'home' || activeView === 'chat' || activeView === 'library') setContext('home'); else setContext('business'); setMoreOpen(false); }, [activeView]);
+  useEffect(() => saveStored('gwira.sidebar.sections.v2', sectionExpanded), [sectionExpanded]);
+  useEffect(() => saveStored('gwira.sidebar.favorites.v1', Object.fromEntries([...favoriteKeys].map(key => [key,true]))), [favoriteKeys]);
+  useEffect(() => saveStored('gwira.sidebar.menu-preferences.v1', preferences), [preferences]);
+  useEffect(() => { saveStored('gwira.sidebar.manual-orders.v1', orders); saveStored('gwira.sidebar.pinned-order.v1', orders.favorites); }, [orders]);
   useEffect(() => {
-    const closeMenu = (event: PointerEvent): void => { if (!menuRef.current?.contains(event.target as Node) && !menuTriggerRef.current?.contains(event.target as Node)) setSidebarMenu(undefined); };
-    const onKeyDown = (event: KeyboardEvent): void => { if (event.key === 'Escape' && sidebarMenu) { setSidebarMenu(undefined); menuTriggerRef.current?.focus(); } };
-    document.addEventListener('pointerdown', closeMenu); document.addEventListener('keydown', onKeyDown);
-    return () => { document.removeEventListener('pointerdown', closeMenu); document.removeEventListener('keydown', onKeyDown); };
-  }, [sidebarMenu]);
+    const close = (event: PointerEvent) => { if (!menuRef.current?.contains(event.target as Node) && !menuTriggerRef.current?.contains(event.target as Node)) setSidebarMenu(undefined); if (!(event.target as Element).closest('.gwira-more-menu,[aria-label="More"]')) setMoreOpen(false); };
+    const key = (event: KeyboardEvent) => { if (event.key === 'Escape' && !event.defaultPrevented) { if (sidebarMenu) { setSidebarMenu(undefined); menuTriggerRef.current?.focus(); } if (moreOpen) { setMoreOpen(false); sidebarRef.current?.querySelector<HTMLButtonElement>('[aria-label="More"]')?.focus(); } } };
+    document.addEventListener('pointerdown', close); document.addEventListener('keydown', key);
+    const resized = () => setSidebarMenu(undefined);
+    window.addEventListener('resize', resized);
+    return () => { document.removeEventListener('pointerdown', close); document.removeEventListener('keydown', key); window.removeEventListener('resize', resized); };
+  }, [sidebarMenu, moreOpen]);
   useEffect(() => {
     if (!sidebarMenu) return;
     if (menuFocusRequestedRef.current) requestAnimationFrame(() => menuRef.current?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus());
     menuFocusRequestedRef.current = false;
   }, [sidebarMenu]);
+  useEffect(() => { if (moreOpen) document.dispatchEvent(new CustomEvent('gw-item-preview-open', { detail: 'sidebar-more' })); }, [moreOpen]);
+  useEffect(() => { if (collapsed) { setSidebarMenu(undefined); setMoreOpen(false); } }, [collapsed]);
+
+  const sidebarItems = useMemo<SidebarItem[]>(() => projects.flatMap(project => {
+    const sessions = sessionsForProject(project);
+    return getProjectThreadRows({ projectId: project.id, activeProjectId: activeProject?.id, activeConversationId: activeSession?.codexConversationId, activeSessionId, expandedProjectIds: new Set(projects.map(p => p.id)), histories: historiesByProject[project.id] ?? [], sessions }).map(row => {
+      if (row.kind === 'session') return { key: sessionItemKey(project.id,row.session.id), title: compactSessionTitle(row.session), updatedAt: row.session.updatedAt, createdAt: row.session.startedAt, project, kind: 'session' as const, session: row.session, active: row.active, running: row.running };
+      const matching = sessions.find(session => session.codexConversationId === row.history.id);
+      const updatedAt = matching && Date.parse(matching.updatedAt) > Date.parse(row.history.updatedAt) ? matching.updatedAt : row.history.updatedAt;
+      return { key: historyItemKey(project.id,row.history.id), title: normalizeSidebarTitle(row.history.title), updatedAt, createdAt: row.history.createdAt, project, kind: 'history' as const, history: row.history, active: row.active, running: row.running };
+    });
+  }), [projects, historiesByProject, sessionsForProject, activeProject?.id, activeSession?.codexConversationId, activeSessionId]);
   useEffect(() => {
-    if (activeView === 'home' || activeView === 'chat') setContext('home');
-    else if (activeView !== 'library') setContext('workspace');
-  }, [activeView]);
-  const openHome = () => { setContext('home'); onOpenHome(); };
-  const openWorkspace = () => { setContext('workspace'); if (activeView === 'home' || activeView === 'chat') onSelectBusinessView('dashboard'); };
-  const sidebarItems = useMemo<SidebarItem[]>(() => projects.flatMap((project) => {
-    const histories = historiesByProject[project.id] ?? [];
-    const historyConversationIds = new Set(histories.map((history) => history.id));
-    const historyItems = histories.map((history) => ({ key: historyItemKey(project.id, history.id), title: normalizeSidebarTitle(history.title), updatedAt: history.updatedAt, project, kind: 'history' as const, history }));
-    const sessionItems = sessionsForProject(project).filter((session) => !session.codexConversationId || !historyConversationIds.has(session.codexConversationId)).map((session) => ({ key: sessionItemKey(project.id, session.id), title: compactSessionTitle(session), updatedAt: session.updatedAt, project, kind: 'session' as const, session }));
-    return [...historyItems, ...sessionItems];
-  }), [historiesByProject, projects, sessionsForProject]);
-  const favoriteItems = useMemo(() => {
-    const items = sidebarItems.filter((item) => favoriteKeys.has(item.key));
-    if (menuPreferences.pinnedSort === 'updated') return sortSidebarItems(items, 'updated');
-    return [...items].sort((left, right) => (pinnedOrder.indexOf(left.key) === -1 ? Number.MAX_SAFE_INTEGER : pinnedOrder.indexOf(left.key)) - (pinnedOrder.indexOf(right.key) === -1 ? Number.MAX_SAFE_INTEGER : pinnedOrder.indexOf(right.key)));
-  }, [favoriteKeys, menuPreferences.pinnedSort, pinnedOrder, sidebarItems]);
-  const recentItems = useMemo(() => {
-    const items = menuPreferences.recentShowProjects ? sidebarItems : sidebarItems.filter((item) => item.project.id === activeProject?.id);
-    return sortSidebarItems(items.map((item) => ({ ...item, updatedAt: recentAccess[item.key] ?? item.updatedAt })), menuPreferences.recentSort).slice(0, 5);
-  }, [activeProject?.id, menuPreferences.recentShowProjects, menuPreferences.recentSort, recentAccess, sidebarItems]);
-  const toggleSection = (section: SidebarSection) => setSectionExpanded((current) => ({ ...current, [section]: !current[section] }));
-  const toggleFavorite = (key: string) => setFavoriteKeys((current) => { const next = new Set(current); next.has(key) ? next.delete(key) : next.add(key); return next; });
-  const openSidebarMenu = (section: SidebarSection, trigger: HTMLButtonElement, focusMenu = false) => {
+    const aliases = new Map<string,string>();
+    for (const project of projects) for (const session of sessionsForProject(project)) {
+      const canonical = session.codexConversationId ? historyItemKey(project.id, session.codexConversationId) : undefined;
+      if (canonical && sidebarItems.some(item => item.key === canonical)) aliases.set(sessionItemKey(project.id, session.id), canonical);
+    }
+    if ([...favoriteKeys].some(key => aliases.has(key))) setFavoriteKeys(new Set(remapSidebarKeys([...favoriteKeys], aliases)));
+    if (Object.values(orders).some(keys => keys.some(key => aliases.has(key)))) setOrders(current => ({ favorites: remapSidebarKeys(current.favorites, aliases), projects: remapSidebarKeys(current.projects, aliases), recent: remapSidebarKeys(current.recent, aliases) }));
+  }, [sidebarItems, projects, sessionsForProject, favoriteKeys, orders]);
+  const favoriteItems = useStableSidebarRows(orderSidebarItems(sidebarItems.filter(item => favoriteKeys.has(item.key)), preferences.pinnedSort, orders.favorites), pointerInside);
+  const recentItems = useStableSidebarRows(orderSidebarItems(sidebarItems, preferences.recentSort, orders.recent), pointerInside);
+  const projectItems = useStableSidebarRows(orderSidebarItems(sidebarItems, preferences.projectSort, orders.projects), pointerInside);
+  const sidebarContext = context;
+  const railSelection = neutralRail ? null : primaryNavigationSelection(activeView,sidebarContext);
+  const moreRoutes = workspaceToolRoutes;
+  const openMoreRoute = (route: WorkspaceRoute) => { setMoreOpen(false); if (route.view === 'skills') onSelectSkills(); else if (route.view !== 'home') onSelectBusinessView(route.view); };
+  const toggleFavorite = (key: string) => setFavoriteKeys(current => { const next = new Set(current); next.has(key) ? next.delete(key) : next.add(key); return next; });
+  const openSidebarItem = (item: SidebarItem) => { if (item.kind === 'history' && item.history) onOpenHistory(item.project,item.history); else if (item.session) onOpenSession(item.project,item.session); };
+  const openSidebarMenu = (section: SidebarSection, trigger: HTMLButtonElement, keyboard = false) => {
     if (sidebarMenu?.section === section) { setSidebarMenu(undefined); return; }
-    menuTriggerRef.current = trigger;
-    menuFocusRequestedRef.current = focusMenu;
+    document.dispatchEvent(new CustomEvent('gw-item-preview-open', { detail: 'sidebar-menu' }));
+    menuTriggerRef.current = trigger; menuFocusRequestedRef.current = keyboard;
     const rect = trigger.getBoundingClientRect();
-    const width = 218; const height = 180;
-    setSidebarMenuPosition({ top: Math.max(8, Math.min(rect.bottom + 5, window.innerHeight - height - 8)), left: Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8)) });
-    setSidebarMenu({ section, panel: 'root' });
+    setSidebarMenuPosition({ top: rect.bottom, left: rect.left }); setSidebarMenu({ section,panel:'root' });
   };
-  const movePinnedItem = (draggedKey: string, targetKey: string) => setPinnedOrder((current) => {
-    const all = favoriteItems.map((item) => item.key); const next = [...current.filter((key) => all.includes(key) && key !== draggedKey), ...all.filter((key) => !current.includes(key) && key !== draggedKey)];
-    const target = next.indexOf(targetKey); next.splice(Math.max(0, target), 0, draggedKey); return next;
+  const changePreferences = (update: Partial<SidebarPreferences>) => {
+    const next = readSidebarPreferences({ ...preferences, ...update });
+    setOrders(current => ({ favorites: update.pinnedSort === 'manual' && !current.favorites.length ? favoriteItems.map(i=>i.key) : current.favorites, projects: update.projectSort === 'manual' && !current.projects.length ? projectItems.map(i=>i.key) : current.projects, recent: update.recentSort === 'manual' && !current.recent.length ? recentItems.map(i=>i.key) : current.recent }));
+    setPreferences(next); setPointerInside(false);
+  };
+  const reorder = (section: SidebarSection, moving: string, target: string) => { setOrders(current => ({ ...current, [section]: moveSidebarItem(current[section], (section === 'favorites' ? favoriteItems : section === 'projects' ? projectItems : recentItems).map(i=>i.key), moving,target) })); setPointerInside(false); };
+  const openCreateProject = (trigger: HTMLElement) => { document.dispatchEvent(new CustomEvent('gw-item-preview-open', { detail: 'sidebar-dialog' })); createTriggerRef.current = trigger; setCreateProjectOpen(true); };
+  const closeCreateProject = () => { setCreateProjectOpen(false); requestAnimationFrame(() => createTriggerRef.current?.focus()); };
+  const sectionHeading = (section: SidebarSection, label: string) => <SidebarSectionHeading label={label} projects={section==='projects'} expanded={sectionExpanded[section]} controls={`sidebar-section-${section}`} onToggle={() => setSectionExpanded(current=>({...current,[section]:!current[section]}))}>
+    <div className={section === 'projects' ? 'projects-header-actions sidebar-heading-actions' : 'sidebar-heading-actions'}><button type="button" className="sidebar-heading-action" aria-label={section === 'projects' ? 'Projects section options' : section === 'favorites' ? 'Pinned options' : 'Recent options'} title={`${label} options`} aria-haspopup="menu" aria-expanded={sidebarMenu?.section === section} onClick={event=>openSidebarMenu(section,event.currentTarget)} onKeyDown={event=>{if(event.key === 'ArrowDown'){event.preventDefault();openSidebarMenu(section,event.currentTarget,true)}}}><Icon name="more" /></button>
+      {section === 'projects' ? <button type="button" className="sidebar-heading-action" aria-label="Add project" title="Add project" onClick={event=>openCreateProject(event.currentTarget)}><Icon name="plus" /></button> : section === 'recent' ? <button type="button" className="sidebar-heading-action" aria-label="New chat" title="New chat" onClick={()=>onNewThread()}><NewThreadIcon /></button> : null}
+    </div>
+  </SidebarSectionHeading>;
+  const renderItems = (items: SidebarItem[], section: SidebarSection, listKey: string, nested = false) => {
+    const manual = (section === 'favorites' ? preferences.pinnedSort : section === 'projects' ? preferences.projectSort : preferences.recentSort) === 'manual';
+    const visible = visibleSidebarItems(items,Boolean(expandedLists[listKey]),items.find(i=>i.active)?.key);
+    return <><SidebarItemList items={visible} favorites={favoriteKeys} formatRelativeTime={formatRelativeTime} onOpen={openSidebarItem} onToggleFavorite={toggleFavorite} onDeleteHistory={onDeleteHistory} nested={nested} draggable={manual} onMoveItem={(moving,target)=>reorder(section,moving,target)} allItems={items} />
+      {items.length > 5 ? <button type="button" className={`sidebar-show-more${nested ? ' is-nested' : ''}`} aria-expanded={Boolean(expandedLists[listKey])} onClick={()=>setExpandedLists(current=>({...current,[listKey]:!current[listKey]}))}>{expandedLists[listKey] ? 'Show less' : `Show more (${items.length - visible.length})`}</button> : null}</>;
+  };
+  const projectGroups = (items: SidebarItem[]) => projects.map(project => {
+    const group = items.filter(i=>i.project.id === project.id);
+    if (!group.length) return null;
+    return <div className="sidebar-recent-group" key={project.id}><span className="sidebar-group-label"><FolderIcon /><ItemTitle sidebar text={project.name} preview={{context:'Project',sources:[project.path]}} /></span>{renderItems(group,'recent',`recent:${project.id}`)}</div>;
   });
-  const openSidebarItem = (item: SidebarItem) => {
-    setRecentAccess((current) => ({ ...current, [item.key]: new Date().toISOString() }));
-    if (item.kind === 'history' && item.history) onOpenHistory(item.project, item.history);
-    else if (item.session) onOpenSession(item.project, item.session);
-  };
-  return <aside className={`sidebar gwira-two-layer-sidebar ${collapsed ? 'is-collapsed' : ''}`}>
-    <div className="window-toolbar" aria-label="Navigation history">
-      <button type="button" className="toolbar-button" aria-label="Back" title={canGoBack ? 'Back' : 'No previous location'} disabled={!canGoBack} onClick={onGoBack}><ToolbarIcon direction="left" /></button>
-      <button type="button" className="toolbar-button" aria-label="Forward" title={canGoForward ? 'Forward' : 'No next location'} disabled={!canGoForward} onClick={onGoForward}><ToolbarIcon direction="right" /></button>
-      <button type="button" className="rail-toggle" title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} onClick={() => setCollapsed((value) => !value)}><RailIcon kind="panel" /></button>
-    </div>
-    <nav className="gwira-primary-rail" aria-label="Primary navigation">
-      <button type="button" className={context === 'home' ? 'active' : ''} title="Home" aria-label="Home" onClick={openHome}><RailIcon kind="home" filled={context === 'home'} /></button>
-      <button type="button" className={context === 'workspace' ? 'active' : ''} title="Workspace" aria-label="Workspace" onClick={openWorkspace}><RailIcon kind="grid" /></button>
-      <button type="button" disabled title="Scheduled work is not implemented yet." aria-label="Scheduled work unavailable"><RailIcon kind="clock" /></button>
-      <button type="button" className={moreOpen ? 'active' : ''} title="More" aria-label="More" aria-expanded={moreOpen} onClick={() => { if (collapsed) setCollapsed(false); setMoreOpen((value) => !value); }}><RailIcon kind="more" /></button>
-      <span className="rail-spacer" />
-      <button type="button" title="Help is not implemented yet." disabled aria-label="Help unavailable"><RailIcon kind="help" /></button>
-      <span className="rail-avatar" aria-label="Local workspace profile">G</span>
-    </nav>
-    <div className="gwira-secondary-sidebar" hidden={collapsed}>
-    {activeView === 'dashboard' && dashboardSidebar ? dashboardSidebar : <>
-    <div className="traffic-spacer" aria-hidden="true" />
-    <header className="gwira-sidebar-header">
-      <div className="gwira-title" aria-label="Gwira local workspace"><strong>Gwira</strong></div>
-      <div className="sidebar-header-actions"><button className="sidebar-notification" type="button" disabled title="Notifications are not implemented yet." aria-label="Notifications unavailable"><RailIcon kind="bell" /></button><button className="sidebar-search" type="button" disabled title="Search is not implemented yet."><SearchIcon /></button></div>
-    </header>
-    {moreOpen ? <div className="gwira-more-menu" role="menu"><button type="button" role="menuitem" onClick={() => { setContext('workspace'); onSelectBusinessView('agents'); setMoreOpen(false); }}>Agents</button><button type="button" role="menuitem" onClick={() => { onSelectSkills(); setMoreOpen(false); }}>Skills</button><button type="button" role="menuitem" onClick={() => { onSelectBusinessView('settings'); setMoreOpen(false); }}>Settings</button></div> : null}
-    <div className="nav-block top-actions">
-      {context !== 'workspace' ? <>
-      <button className="ghost-button" onClick={() => onNewThread()}><NewThreadIcon className="nav-icon" /> New work</button>
-      <button className={`ghost-button ${activeView === 'library' ? 'active' : ''}`} onClick={() => { setContext('home'); onSelectBusinessView('library'); }}><FolderIcon className="nav-icon" /> Library</button>
-      </> : <>
-      <button className={`ghost-button ${activeView === 'inbox' ? 'active' : ''}`} onClick={() => onSelectBusinessView('inbox')}>Inbox</button>
-      <button className={`ghost-button ${activeView === 'library' ? 'active' : ''}`} onClick={() => onSelectBusinessView('library')}>Library</button>
-      <button className={`ghost-button ${activeView === 'dashboard' ? 'active' : ''}`} onClick={() => onSelectBusinessView('dashboard')}>Dashboard</button>
-      <button className={`ghost-button ${activeView === 'my-work' ? 'active' : ''}`} onClick={() => onSelectBusinessView('my-work')}>My Work</button>
-      <button className={`ghost-button ${activeView === 'organization' ? 'active' : ''}`} onClick={() => onSelectBusinessView('organization')}>Views</button>
-      <button className="ghost-button" disabled title="Pipelines are not implemented yet.">Pipelines</button>
-      <button className={`ghost-button ${activeView === 'teams' ? 'active' : ''}`} onClick={() => onSelectBusinessView('teams')}>Teams</button>
-      <button className={`ghost-button ${activeView === 'doats' ? 'active' : ''}`} onClick={() => onSelectBusinessView('doats')}>Doats</button>
-      <button className={`ghost-button ${activeView === 'integrations' ? 'active' : ''}`} onClick={() => onSelectBusinessView('integrations')}>Integrations</button>
-      </>}
-    </div>
 
-    {favoriteItems.length > 0 ? <section className="sidebar-work-section sidebar-favorites" aria-label="Pinned">
-      <div className="sidebar-section-row"><button type="button" className="sidebar-collapsible-heading" aria-expanded={sectionExpanded.favorites} onClick={() => toggleSection('favorites')}>Pinned<span className={sectionExpanded.favorites ? 'sidebar-chevron open' : 'sidebar-chevron'} aria-hidden="true" /></button><div className="sidebar-heading-actions"><button type="button" className="sidebar-heading-action" aria-label="Pinned options" title="Pinned options" aria-haspopup="menu" aria-expanded={sidebarMenu?.section === 'favorites'} onClick={(event) => openSidebarMenu('favorites', event.currentTarget)} onKeyDown={(event) => { if (event.key === 'ArrowDown') { event.preventDefault(); openSidebarMenu('favorites', event.currentTarget, true); } }}>•••</button></div></div>
-      {sectionExpanded.favorites ? <SidebarItemList items={favoriteItems} favorites={favoriteKeys} formatRelativeTime={formatRelativeTime} onOpen={openSidebarItem} onToggleFavorite={toggleFavorite} draggable={menuPreferences.pinnedSort === 'manual'} onMoveItem={movePinnedItem} /> : null}
-    </section> : null}
-
-    <section className="threads-section sidebar-work-section">
-      <div className="projects-header"><button type="button" className="projects-header-toggle" aria-expanded={sectionExpanded.projects} onClick={() => toggleSection('projects')}>Projects<span className={sectionExpanded.projects ? 'sidebar-chevron open' : 'sidebar-chevron'} aria-hidden="true" /></button><div className="projects-header-actions"><button type="button" className="sidebar-heading-action" aria-label="Projects section options" title="Projects options" aria-haspopup="menu" aria-expanded={sidebarMenu?.section === 'projects'} onClick={(event) => openSidebarMenu('projects', event.currentTarget)} onKeyDown={(event) => { if (event.key === 'ArrowDown') { event.preventDefault(); openSidebarMenu('projects', event.currentTarget, true); } }}>•••</button><button className="section-tool-button sidebar-heading-action" type="button" onClick={onAddProject} title="Add project" aria-label="Add project"><FolderPlusIcon className="section-tool-icon" /></button></div></div>
-      {sectionExpanded.projects ? <div className="threads-scroll">
-        {projects.map((project) => {
-          const histories = [...(historiesByProject[project.id] || [])].sort((left, right) => menuPreferences.projectSort === 'name' ? normalizeSidebarTitle(left.title).localeCompare(normalizeSidebarTitle(right.title)) : Date.parse(menuPreferences.projectSort === 'created' ? right.createdAt : right.updatedAt) - Date.parse(menuPreferences.projectSort === 'created' ? left.createdAt : left.updatedAt));
-          const expanded = expandedProjectIds.has(project.id);
-          const rows = getProjectThreadRows({
-            projectId: project.id,
-            activeProjectId: activeProject?.id,
-            activeConversationId: activeSession?.codexConversationId,
-            activeSessionId,
-            expandedProjectIds,
-            histories,
-            sessions: sessionsForProject(project)
-          });
-          return <div className="project-group" key={project.id}>
-            <div className={`project-pill ${project.id === activeProject?.id ? 'active' : ''} ${project.id === openProjectMenuId ? 'menu-open' : ''}`} onClick={() => onToggleProject(project)}>
-              {expanded ? <FolderOpenIcon className="folder-icon" /> : <FolderIcon className="folder-icon" />}
-              <strong>{project.name}</strong>
-              <div className="project-actions">
-                <button className="project-menu-button" onClick={(event) => { event.stopPropagation(); onToggleProjectMenu(project, event.currentTarget); }} title="Project options">•••</button>
-                <button className="project-new-chat-button" onClick={(event) => { event.stopPropagation(); onNewThread(project); }} title={`New chat in ${project.name}`} aria-label={`New chat in ${project.name}`}><NewThreadIcon /></button>
-              </div>
+  return <aside ref={sidebarRef} data-sidebar-context={sidebarContext} className={`sidebar gwira-two-layer-sidebar is-${sidebarContext}-sidebar ${collapsed ? 'is-collapsed' : ''}${overlay ? ' is-overlay' : ''}`} aria-label="Gwira navigation">
+    <PrimaryRail selection={railSelection} onHome={()=>{setContext('home');onOpenHome()}} onWorkspace={()=>onSelectBusinessView('dashboard')} onSchedule={()=>onSelectBusinessView('schedule')} moreOpen={moreOpen} onMore={()=>setMoreOpen(v=>!v)} onMoreKeyDown={event=>{if(['ArrowDown','ArrowUp'].includes(event.key)){event.preventDefault();const last=event.key==='ArrowUp';setMoreOpen(true);requestAnimationFrame(()=>{const items=sidebarRef.current?.querySelectorAll<HTMLButtonElement>('.gwira-more-menu button');items?.[last?items.length-1:0]?.focus()})}}} account={<span className="rail-avatar" aria-label="Local workspace profile">G</span>}/>
+    {moreOpen ? <div className="gwira-more-menu" role="menu" onKeyDown={event=>{const items=[...event.currentTarget.querySelectorAll<HTMLButtonElement>('button')];const index=items.indexOf(document.activeElement as HTMLButtonElement);if(['ArrowDown','ArrowUp','Home','End'].includes(event.key)){event.preventDefault();items[event.key==='Home'?0:event.key==='End'?items.length-1:(index+(event.key==='ArrowUp'?-1:1)+items.length)%items.length]?.focus()}if(event.key==='Escape'){event.preventDefault();setMoreOpen(false);sidebarRef.current?.querySelector<HTMLButtonElement>('[aria-label="More"]')?.focus()}}}>{moreRoutes.map(route=><button key={route.view} type="button" role="menuitem" data-navigation-view={route.view} className={activeView===route.view?'active':''} onClick={()=>openMoreRoute(route)}><NavigationIcon name={route.icon} active={activeView===route.view} size={18} />{route.label}</button>)}</div> : null}
+    <div className="gwira-secondary-sidebar" hidden={collapsed} onPointerEnter={()=>setPointerInside(true)} onPointerLeave={()=>setPointerInside(false)}>
+    <div id="workspace-tools-panel" className="workspace-tools-target" ref={workspaceToolsTarget} hidden={!workspaceToolsOpen}/>
+    <div hidden={workspaceToolsOpen} style={{display:workspaceToolsOpen?'none':'contents'}}>
+    {activeView === 'schedule' ? <div className="gw-schedule gw-schedule-context" ref={scheduleSidebarRef} /> : activeView==='work-sessions'?<><header className="gwira-sidebar-header"><h2>Work Sessions</h2></header><p className="sidebar-section-empty">Recorded work and results.</p></>: moreRoutes.some(route=>route.view===activeView) ? <WorkspaceToolsNavigation activeView={activeView} onNavigate={view=>{const route=moreRoutes.find(item=>item.view===view);if(route)openMoreRoute(route);}}/> : sidebarContext === 'business' ? dashboardSidebar : <HomeSidebarContent workspaceLabel="Gwira local workspace" onNewWork={()=>onNewThread()} libraryActive={activeView==='library'} onLibrary={()=>{setContext('home');onSelectBusinessView('library')}} onScroll={()=>setSidebarMenu(undefined)} sections={<>
+        <section className="sidebar-work-section sidebar-favorites" aria-label="Pinned" hidden={!preferences.visible.favorites}>{sectionHeading('favorites','Pinned')}<div id="sidebar-section-favorites" hidden={!sectionExpanded.favorites}>{favoriteItems.length ? renderItems(favoriteItems,'favorites','favorites') : <p className="sidebar-section-empty">Pin conversations to keep them here.</p>}</div></section>
+        <section className="threads-section sidebar-work-section" aria-label="Projects" hidden={!preferences.visible.projects}>{sectionHeading('projects','Projects')}<div id="sidebar-section-projects" className="threads-scroll" hidden={!sectionExpanded.projects}>
+          {preferences.projectGrouping === 'list' ? renderItems(projectItems,'projects','projects-list') : projects.map(project=><div className="project-group" key={project.id}>
+            <div className={`project-pill${project.id===activeProject?.id?' active':''}${project.id===openProjectMenuId?' menu-open':''}`} role="button" tabIndex={0} aria-expanded={expandedProjectIds.has(project.id)} aria-label={project.name} onClick={()=>onToggleProject(project)} onKeyDown={event=>{if(event.target===event.currentTarget){if(event.key==='ArrowRight'&&!expandedProjectIds.has(project.id)){event.preventDefault();onToggleProject(project)}else if(event.key==='ArrowLeft'&&expandedProjectIds.has(project.id)){event.preventDefault();onToggleProject(project)}else onProjectKeyDown(event,()=>onToggleProject(project))}}}>
+              {expandedProjectIds.has(project.id)?<FolderOpenIcon className="folder-icon" />:<FolderIcon className="folder-icon" />}<strong><ItemTitle sidebar text={project.name} preview={{context:'Project',sources:[project.path]}} /></strong><div className="project-actions"><button type="button" className="project-menu-button" onClick={event=>{event.stopPropagation();onToggleProjectMenu(project,event.currentTarget)}} aria-label={`Options for ${project.name}`} aria-haspopup="menu" aria-expanded={project.id===openProjectMenuId} title="Project options"><Icon name="more" /></button><button type="button" className="project-new-chat-button" onClick={event=>{event.stopPropagation();onNewThread(project)}} aria-label={`New chat in ${project.name}`} title={`New chat in ${project.name}`}><NewThreadIcon /></button></div>
             </div>
-            {rows.map((row) => row.kind === 'session' ? (
-              <div className={`thread-item ${row.active ? 'active-thread' : ''}`} key={row.session.id} role="button" tabIndex={0} onClick={() => openSidebarItem({ key: sessionItemKey(project.id, row.session.id), title: row.title, updatedAt: row.session.updatedAt, project, kind: 'session', session: row.session })} onKeyDown={(event) => onProjectKeyDown(event, () => openSidebarItem({ key: sessionItemKey(project.id, row.session.id), title: row.title, updatedAt: row.session.updatedAt, project, kind: 'session', session: row.session }))}>
-                <span className="thread-title">{normalizeSidebarTitle(row.title)}</span><span className="thread-time">{row.running ? <ThreadSpinner /> : formatRelativeTime(row.session.updatedAt)}</span>
-                <button className="pin-thread-button" type="button" aria-label={`${favoriteKeys.has(sessionItemKey(project.id, row.session.id)) ? 'Unpin' : 'Pin'} ${normalizeSidebarTitle(row.title)}`} title={favoriteKeys.has(sessionItemKey(project.id, row.session.id)) ? 'Unpin from Favorites' : 'Pin to Favorites'} onClick={(event) => { event.stopPropagation(); toggleFavorite(sessionItemKey(project.id, row.session.id)); }}>{favoriteKeys.has(sessionItemKey(project.id, row.session.id)) ? '★' : '☆'}</button>
-              </div>
-            ) : (
-              <div className={`thread-item history-thread ${row.active ? 'active-thread' : ''} ${row.running ? 'running-thread' : ''}`} key={row.history.id} role="button" tabIndex={0} onClick={() => openSidebarItem({ key: historyItemKey(project.id, row.history.id), title: row.history.title, updatedAt: row.history.updatedAt, project, kind: 'history', history: row.history })} onKeyDown={(event) => onProjectKeyDown(event, () => openSidebarItem({ key: historyItemKey(project.id, row.history.id), title: row.history.title, updatedAt: row.history.updatedAt, project, kind: 'history', history: row.history }))}>
-                <span className="thread-title">{normalizeSidebarTitle(row.history.title)}</span><span className="thread-time">{row.running ? <ThreadSpinner /> : formatRelativeTime(row.history.updatedAt)}</span>
-                {!row.running ? <button className="delete-thread-button" type="button" title="Delete thread" aria-label={`Delete ${normalizeSidebarTitle(row.history.title)}`} onClick={(event) => onDeleteHistory(event, project, row.history)}><DeleteThreadIcon /></button> : null}
-                <button className="pin-thread-button" type="button" aria-label={`${favoriteKeys.has(historyItemKey(project.id, row.history.id)) ? 'Unpin' : 'Pin'} ${normalizeSidebarTitle(row.history.title)}`} title={favoriteKeys.has(historyItemKey(project.id, row.history.id)) ? 'Unpin from Favorites' : 'Pin to Favorites'} onClick={(event) => { event.stopPropagation(); toggleFavorite(historyItemKey(project.id, row.history.id)); }}>{favoriteKeys.has(historyItemKey(project.id, row.history.id)) ? '★' : '☆'}</button>
-              </div>
-            ))}
-          </div>;
-        })}
-      </div> : null}
-    </section>
-
-    {recentItems.length > 0 ? <section className="sidebar-work-section sidebar-recent" aria-label="Recent">
-      <div className="sidebar-section-row"><button type="button" className="sidebar-collapsible-heading" aria-expanded={sectionExpanded.recent} onClick={() => toggleSection('recent')}>Recents<span className={sectionExpanded.recent ? 'sidebar-chevron open' : 'sidebar-chevron'} aria-hidden="true" /></button><div className="sidebar-heading-actions"><button type="button" className="sidebar-heading-action" aria-label="Recent options" title="Recent options" aria-haspopup="menu" aria-expanded={sidebarMenu?.section === 'recent'} onClick={(event) => openSidebarMenu('recent', event.currentTarget)} onKeyDown={(event) => { if (event.key === 'ArrowDown') { event.preventDefault(); openSidebarMenu('recent', event.currentTarget, true); } }}>•••</button><button type="button" className="sidebar-heading-action" aria-label="New chat" title="New chat" onClick={() => onNewThread()}><NewThreadIcon className="section-tool-icon" /></button></div></div>
-      {sectionExpanded.recent ? <SidebarItemList items={recentItems} favorites={favoriteKeys} formatRelativeTime={formatRelativeTime} onOpen={openSidebarItem} onToggleFavorite={toggleFavorite} /> : null}
-    </section> : null}
-
-    {sidebarMenu && sidebarMenuPosition ? <SidebarContextMenu section={sidebarMenu.section} panel={sidebarMenu.panel} position={sidebarMenuPosition} preferences={menuPreferences} onPanelChange={(panel) => setSidebarMenu((current) => current ? { ...current, panel } : current)} onClose={() => { setSidebarMenu(undefined); menuTriggerRef.current?.focus(); }} onPreferencesChange={(update) => setMenuPreferences((current) => ({ ...current, ...update }))} menuRef={menuRef} /> : null}
-
-    <footer className="sidebar-account" aria-label="Account status"><span className="account-avatar" aria-hidden="true">G</span><span><strong>Local workspace</strong><small>No account connected</small></span><span className="account-more" aria-hidden="true">•••</span></footer>
-    </>}
-    </div>
+            <div hidden={!expandedProjectIds.has(project.id)}>{renderItems(projectItems.filter(item=>item.project.id===project.id),'projects',`project:${project.id}`,true)}</div>
+          </div>)}
+          {!projects.length ? <p className="sidebar-section-empty">Add a project to organize conversations.</p> : null}
+        </div></section>
+        <section className="sidebar-work-section sidebar-recent" aria-label="Recent" hidden={!preferences.visible.recent}>{sectionHeading('recent','Recents')}<div id="sidebar-section-recent" hidden={!sectionExpanded.recent}>{recentItems.length ? preferences.recentGrouping==='project' ? projectGroups(recentItems) : renderItems(recentItems,'recent','recent') : <p className="sidebar-section-empty">No recent conversations.</p>}</div></section>
+      </>} footer={<footer className="sidebar-account" aria-label="Account status"><span className="account-avatar" aria-hidden="true">G</span><span><strong>Local workspace</strong><small>No account connected</small></span><span className="account-more" aria-hidden="true"><Icon name="more" /></span></footer>}/>}
+    </div></div>
+    {sidebarMenu && sidebarMenuPosition ? <SidebarContextMenu section={sidebarMenu.section} panel={sidebarMenu.panel} position={sidebarMenuPosition} preferences={preferences} onPanelChange={panel=>setSidebarMenu(current=>current?{...current,panel}:current)} onClose={()=>{setSidebarMenu(undefined);menuTriggerRef.current?.focus()}} onPreferencesChange={changePreferences} menuRef={menuRef} /> : null}
+    {createProjectOpen ? <ProjectCreateDialog onClose={closeCreateProject} onCreate={(name,path)=>{onCreateProject(name,path);closeCreateProject()}} onChooseFolder={()=>window.codexDesktop.selectDirectory()} /> : null}
   </aside>;
 }
 
-function SidebarContextMenu({ section, panel, position, preferences, onPanelChange, onClose, onPreferencesChange, menuRef }: { section: SidebarSection; panel: NonNullable<SidebarMenu>['panel']; position: { top: number; left: number }; preferences: SidebarMenuPreferences; onPanelChange: (panel: NonNullable<SidebarMenu>['panel']) => void; onClose: () => void; onPreferencesChange: (update: Partial<SidebarMenuPreferences>) => void; menuRef: React.RefObject<HTMLDivElement | null> }): React.ReactElement {
-  const sort = section === 'projects' ? preferences.projectSort : preferences.recentSort;
-  const options: Array<{ value: SidebarSort; label: string }> = [{ value: 'updated', label: 'Last updated' }, { value: 'created', label: 'Date created' }, { value: 'name', label: 'Name' }];
-  const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>): void => {
-    const buttons = [...event.currentTarget.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')];
-    const index = buttons.indexOf(document.activeElement as HTMLButtonElement);
-    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') { event.preventDefault(); buttons[(index + (event.key === 'ArrowDown' ? 1 : -1) + buttons.length) % buttons.length]?.focus(); }
-    if (event.key === 'Home' || event.key === 'End') { event.preventDefault(); buttons[event.key === 'Home' ? 0 : buttons.length - 1]?.focus(); }
-    if (event.key === 'Escape') { event.preventDefault(); onClose(); }
-  };
-  return <div className="sidebar-context-menu" ref={menuRef} role="menu" onKeyDown={handleKeyDown} style={position}>
-    {panel !== 'root' ? <button type="button" className="sidebar-menu-back" onClick={() => onPanelChange('root')}>‹ Back</button> : null}
-    {section === 'favorites' ? <>
-      <button type="button" role="menuitemradio" aria-checked={preferences.pinnedSort === 'updated'} onClick={() => { onPreferencesChange({ pinnedSort: 'updated' }); onClose(); }}><span>Last updated</span>{preferences.pinnedSort === 'updated' ? <b>✓</b> : null}</button>
-      <button type="button" role="menuitemradio" aria-checked={preferences.pinnedSort === 'manual'} onClick={() => { onPreferencesChange({ pinnedSort: 'manual' }); onClose(); }}><span>Manual order</span>{preferences.pinnedSort === 'manual' ? <b>✓</b> : null}</button>
-    </> : panel === 'root' ? <>
-      <button type="button" role="menuitem" onClick={() => onPanelChange('organize')}>Organize sidebar <span>›</span></button>
-      <button type="button" role="menuitem" onClick={() => onPanelChange('sort')}>Sort chats by <span>›</span></button>
-      {section === 'recent' ? <><hr /><span className="sidebar-menu-label">Show</span><button type="button" role="menuitemcheckbox" aria-checked={preferences.recentShowProjects} onClick={() => onPreferencesChange({ recentShowProjects: !preferences.recentShowProjects })}><span>Projects</span>{preferences.recentShowProjects ? <b>✓</b> : null}</button></> : null}
-    </> : panel === 'sort' ? <>{options.map((option) => <button key={option.value} type="button" role="menuitemradio" aria-checked={sort === option.value} onClick={() => { onPreferencesChange(section === 'projects' ? { projectSort: option.value } : { recentSort: option.value }); onClose(); }}><span>{option.label}</span>{sort === option.value ? <b>✓</b> : null}</button>)}</> : <>
-      <span className="sidebar-menu-label">Section controls</span>
-      <button type="button" disabled title="Section visibility preferences are not implemented yet.">Section visibility</button>
-      <button type="button" disabled title="Sidebar section ordering is not implemented yet.">Section order</button>
-    </>}
-  </div>;
-}
-
-function SidebarItemList({ items, favorites, formatRelativeTime, onOpen, onToggleFavorite, draggable = false, onMoveItem }: { items: SidebarItem[]; favorites: ReadonlySet<string>; formatRelativeTime: (iso: string) => string; onOpen: (item: SidebarItem) => void; onToggleFavorite: (key: string) => void; draggable?: boolean; onMoveItem?: (draggedKey: string, targetKey: string) => void }): React.ReactElement {
-  return <div className="sidebar-item-list">
-    {items.map((item) => <div className="sidebar-shortcut-item" key={item.key} role="button" tabIndex={0} draggable={draggable} title={`${item.title} · ${item.project.name}`} onDragStart={(event) => { if (draggable) event.dataTransfer.setData('text/plain', item.key); }} onDragOver={(event) => { if (draggable) event.preventDefault(); }} onDrop={(event) => { if (!draggable) return; event.preventDefault(); const draggedKey = event.dataTransfer.getData('text/plain'); if (draggedKey && draggedKey !== item.key) onMoveItem?.(draggedKey, item.key); }} onClick={() => onOpen(item)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onOpen(item); } }}>
-      <span className="sidebar-item-icon" aria-hidden="true">{item.kind === 'history' ? '◌' : '◍'}</span><span className="sidebar-item-title">{item.title}</span><span className="sidebar-item-time">{formatRelativeTime(item.updatedAt)}</span>
-      <button type="button" className="pin-thread-button" title={favorites.has(item.key) ? 'Unpin from Favorites' : 'Pin to Favorites'} aria-label={`${favorites.has(item.key) ? 'Unpin' : 'Pin'} ${item.title}`} onClick={(event) => { event.stopPropagation(); onToggleFavorite(item.key); }}>{favorites.has(item.key) ? '★' : '☆'}</button>
-    </div>)}
-  </div>;
-}
-
-function ToolbarIcon({ direction }: { direction: 'left' | 'right' }): React.ReactElement {
-  const points = direction === 'left' ? '14 5 7 12 14 19' : '10 5 17 12 10 19';
-  return <svg viewBox="0 0 24 24" aria-hidden="true"><polyline points={points} fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" /></svg>;
-}
-
-function RailIcon({ kind, filled = false }: { kind: 'panel' | 'home' | 'grid' | 'clock' | 'more' | 'help' | 'bell'; filled?: boolean }): React.ReactElement {
-  const paths: Record<typeof kind, React.ReactNode> = {
-    panel: <><rect x="4" y="5" width="16" height="14" rx="1" /><path d="M10 5v14" /></>, home: filled ? <path d="M3.5 10.5 12 3l8.5 7.5V21h-6v-6H9.5v6h-6z" fill="currentColor" stroke="none" /> : <><path d="m4 11 8-7 8 7" /><path d="M6.5 10v9h11v-9" /></>, grid: <><rect x="4" y="4" width="6" height="6" /><rect x="14" y="4" width="6" height="6" /><rect x="4" y="14" width="6" height="6" /><rect x="14" y="14" width="6" height="6" /></>, clock: <><circle cx="12" cy="12" r="8" /><path d="M12 7v5l3 2" /></>, more: <><circle cx="5" cy="12" r="1" fill="currentColor" /><circle cx="12" cy="12" r="1" fill="currentColor" /><circle cx="19" cy="12" r="1" fill="currentColor" /></>, help: <><circle cx="12" cy="12" r="8" /><path d="M9.5 9a2.7 2.7 0 1 1 4.5 2c-1.2.9-2 1.4-2 3" /><path d="M12 17h.01" /></>, bell: <><path d="M18 10a6 6 0 0 0-12 0c0 6-2 6-2 7h16c0-1-2-1-2-7" /><path d="M10 20h4" /></>
-  };
-  return <svg className="rail-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{paths[kind]}</svg>;
-}
-
-function ThreadSpinner(): React.ReactElement {
-  return <svg className="thread-spinner" width="24" height="24" viewBox="0 0 24 24" fill="none" aria-label="Running" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="8" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeDasharray="38" strokeDashoffset="10" /></svg>;
+function SidebarItemList({ items, allItems, favorites, formatRelativeTime, onOpen, onToggleFavorite, onDeleteHistory, nested, draggable, onMoveItem }: { items: SidebarItem[]; allItems: SidebarItem[]; favorites: ReadonlySet<string>; formatRelativeTime: (iso: string)=>string; onOpen: (item:SidebarItem)=>void; onToggleFavorite:(key:string)=>void; onDeleteHistory:ProjectSidebarProps['onDeleteHistory']; nested:boolean; draggable:boolean; onMoveItem:(moving:string,target:string)=>void }):React.ReactElement {
+  return <div className={`sidebar-item-list${nested?' is-nested':''}`}>{items.map(item=><SidebarConversationRow key={item.key} title={item.title} preview={{context:item.project.name,metadata:`Last activity: ${formatRelativeTime(item.updatedAt)}`,sources:[item.project.path]}} time={item.running?<AgentActivityIndicator status="working" executing compact/>:formatRelativeTime(item.updatedAt)} pinned={favorites.has(item.key)} onOpen={()=>onOpen(item)} onTogglePin={()=>onToggleFavorite(item.key)} className={`${nested?'thread-item':'sidebar-shortcut-item'}${item.kind==='history'?' history-thread':''}${item.running?' running-thread':''}${item.active?' active-thread is-selected':''}`} aria-current={item.active?'page':undefined} aria-keyshortcuts={draggable?'Alt+ArrowUp Alt+ArrowDown':undefined} data-sidebar-item-key={item.key} draggable={draggable} onDragStart={event=>{if(draggable)event.dataTransfer.setData('text/plain',item.key)}} onDragOver={event=>{if(draggable)event.preventDefault()}} onDrop={event=>{if(draggable){event.preventDefault();onMoveItem(event.dataTransfer.getData('text/plain'),item.key)}}} onKeyDown={event=>{if(event.target!==event.currentTarget)return;if(draggable&&event.altKey&&['ArrowUp','ArrowDown'].includes(event.key)){event.preventDefault();const index=allItems.findIndex(i=>i.key===item.key);const target=allItems[index+(event.key==='ArrowUp'?-1:1)];if(target)onMoveItem(item.key,target.key)}}}>
+      {item.history?.filePath&&!item.running ? <button type="button" className="delete-thread-button" aria-label={`Delete ${item.title}`} title="Delete conversation…" onClick={event=>onDeleteHistory(event,item.project,item.history!)}><Icon name="trash" /></button>:null}
+  </SidebarConversationRow>)}</div>;
 }

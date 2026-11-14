@@ -1,3 +1,4 @@
+import { AUTO_MODEL } from './modelRouting.js';
 import { buildChildProcessEnv, type PackagedPathOptions } from './processEnv.js';
 import type { ConversationContext, PermissionMode, ReasoningEffort } from '../shared/types.js';
 
@@ -58,7 +59,7 @@ export function buildCodexExecSpawnOptions(request: CodexExecSpawnRequest, envOp
   if (request.context === 'business') {
     commonArgs.push('-c', `developer_instructions=${JSON.stringify(BUSINESS_ASSISTANT_INSTRUCTIONS)}`);
   }
-  const modelArgs = model ? ['-m', model] : request.codexConversationId ? [] : ['-m', DEFAULT_CODEX_MODEL];
+  const modelArgs = model === AUTO_MODEL ? [] : model ? ['-m', model] : request.codexConversationId ? [] : ['-m', DEFAULT_CODEX_MODEL];
   const resumeArgs = [
     ...commonArgs,
     ...modelArgs,

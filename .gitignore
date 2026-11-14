@@ -5,6 +5,12 @@ release/
 *.log
 .env
 *.tsbuildinfo
+.cache/
 
 # GWIRA: research snapshots - never commit reference repos
 /workflow_feature/
+
+# Runtime authentication configuration and encrypted account vaults
+.env.*.local
+*.session-vault
+dist-server/

@@ -1,0 +1,28 @@
+/* First-run Home: lives inside the real Home canvas, so it inherits the shell's top bar, rail and composer styling. */
+.first-run-home { display:flex; flex-direction:column; min-height:0; height:100%; }
+.first-run-bar { display:flex; align-items:center; justify-content:space-between; gap:var(--gw-space-3); }
+.first-run-title { font-size:var(--gw-type-meta); color:var(--gw-text-muted); }
+.first-run-menu { position:relative; margin-left:auto; }
+.first-run-menu__button,.first-run-menu__list button,.first-run-actions button,.first-run-state button { font:inherit; color:var(--gw-text); background:var(--gw-surface); border:1px solid var(--gw-border); border-radius:var(--gw-radius-md); cursor:pointer; }
+.first-run-menu__button { display:inline-flex; align-items:center; justify-content:center; width:var(--gw-space-8); height:var(--gw-space-8); border-color:transparent; background:transparent; }
+.first-run-menu__button:hover,.first-run-menu__list button:hover:not(:disabled),.first-run-actions button:hover:not(:disabled),.first-run-state button:hover { background:var(--gw-hover); }
+.first-run-menu__button:focus-visible,.first-run-menu__list button:focus-visible,.first-run-actions button:focus-visible,.first-run-state button:focus-visible { outline:var(--gw-focus); outline-offset:2px; }
+.first-run-menu__list { position:absolute; z-index:5; top:calc(100% + var(--gw-space-1)); right:0; display:grid; min-width:180px; padding:var(--gw-space-1); background:var(--gw-surface); border:1px solid var(--gw-border-control); border-radius:var(--gw-radius-md); }
+.first-run-menu__list button { padding:var(--gw-space-2) var(--gw-space-3); text-align:left; border-color:transparent; font-size:var(--gw-type-body); }
+.first-run-menu__list button:disabled { opacity:.45; cursor:not-allowed; }
+.first-run-content { flex:1 1 auto; min-height:0; overflow:auto; }
+.first-run-state { max-width:420px; margin:var(--gw-space-16) auto; text-align:center; color:var(--gw-text-muted); }
+.first-run-state h1 { font-size:var(--gw-type-page); font-weight:var(--gw-weight-medium); color:var(--gw-text); margin:0 0 var(--gw-space-2); }
+.first-run-state button { margin-top:var(--gw-space-3); padding:var(--gw-space-2) var(--gw-space-4); }
+.first-run-conversation { width:100%; max-width:860px; margin:0 auto; padding:var(--gw-space-6) var(--gw-space-6) var(--gw-space-4); box-sizing:border-box; }
+.first-run-dock { flex:none; width:100%; max-width:860px; margin:0 auto; padding:0 var(--gw-space-6) var(--gw-space-4); box-sizing:border-box; }
+.first-run-dock .composer-panel { width:100%; box-sizing:border-box; margin:0; }
+.first-run-actions { display:flex; flex-wrap:wrap; align-items:center; gap:var(--gw-space-2); margin:0 0 var(--gw-space-3); }
+.first-run-actions button { display:inline-flex; align-items:center; gap:var(--gw-space-2); padding:var(--gw-space-1) var(--gw-space-3); font-size:var(--gw-type-meta); }
+.first-run-actions button.is-primary { color:var(--gw-action-fg); background:var(--gw-action-bg); border-color:var(--gw-action-bg); }
+.first-run-actions button.is-primary:hover:not(:disabled) { background:var(--gw-action-hover); }
+.first-run-actions button:disabled { opacity:.45; cursor:not-allowed; }
+.first-run-approved { font-size:var(--gw-type-meta); color:var(--gw-text-muted); }
+.first-run-dock .suggestions { margin-bottom:var(--gw-space-3); }
+.meet-gwira--embedded { height:auto; min-height:100%; background:transparent; overflow:visible; }
+.meet-gwira--embedded .meet-gwira__layout { min-height:100%; }

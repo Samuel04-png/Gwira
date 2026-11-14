@@ -1,50 +1,87 @@
+import { StatusIndicator } from '../../components/StatusIndicator.js';
+import { normalizeIndicatorStatus } from '../../components/iconModel.js';
+import {WORK_STATUS_LABELS} from '../workfilters/workModel.js';
+import {AvatarArtwork} from '../../components/AvatarArtwork.js';
+import { Icon } from "../../components/Icon.js";
 import type React from 'react';
-import type { Node, NodeProps } from '@xyflow/react';
-import type { WorkGraphNodeType, WorkGraphStatus } from './graphModel.js';
+import { DoatAvatar } from '../doats/ui/DoatAvatar.js';
+import { createProceduralAvatarSpec } from '../doats/ui/avatarModel.js';
+import type { DoatAvatarSpec } from '../doats/ui/types.js';
+import type { WorkGraphNodeType, WorkGraphStatus, WorkOwnerKind } from './graphModel.js';
 
-export type GraphNodeGalleryState = WorkGraphStatus | 'hover' | 'focus' | 'selected' | 'loading';
+export type GraphNodeDisplay = 'full' | 'compact' | 'dot';
+export type GraphNodeAppearance = 'selected' | 'dimmed';
 
 export interface GraphNodeData extends Record<string, unknown> {
   type: WorkGraphNodeType;
   title: string;
   subtitle: string;
   status: WorkGraphStatus;
+  ownerKind?: WorkOwnerKind;
+  ownerId?: string;
+  ownerName?: string;
+  avatar?: DoatAvatarSpec;
+  description?: string;
+  priority?: string;
+  dueDate?: string;
+  updatedAt?: string;
+  runStatus?: string;
+  taskId?: string;
+  reviewerName?: string;
+  resultId?: string;
+  createdAt?: string;
 }
 
-export interface GraphNodeProps {
-  data: GraphNodeData;
-  state?: GraphNodeGalleryState;
+const statusLabels = WORK_STATUS_LABELS;
+
+function stateGlyph(status: WorkGraphStatus, executing: boolean): React.ReactElement {
+  return <StatusIndicator status={normalizeIndicatorStatus(status)} compact animate={executing&&status==='working'}/>;
 }
 
-/** The @xyflow/react node contract is exported for the future canvas only. */
-export type WorkGraphFlowNode = Node<GraphNodeData, 'workGraph'>;
+function ownerLabel(data: GraphNodeData): string {
+  if (data.type === 'approval') return data.reviewerName ?? 'Reviewer';
+  return data.ownerName ?? (data.ownerKind === 'person' ? 'Employee' : data.ownerKind === 'doat' ? 'Doat' : 'Unassigned');
+}
 
-const typeLabel: Record<WorkGraphNodeType, string> = {
-  step: 'Step'
-};
+function ownerAvatar(data: GraphNodeData, size = 28): React.ReactElement {
+  const label = ownerLabel(data);
+  if (data.type === 'doatWork') {
+    return <span className="gwira-work-node__avatar is-doat" aria-label={`${label} Doat`}>
+      <DoatAvatar spec={data.avatar ?? createProceduralAvatarSpec(data.ownerId ?? label)} status={data.status === 'waiting' ? 'waiting_approval' : data.status === 'default' ? 'idle' : data.status} size={size} label={label} />
+    </span>;
+  }
+  const initials = data.type === 'approval' || data.ownerKind === 'person'
+    ? label.split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase()
+    : '—';
+  return <span className="gwira-work-node__avatar is-person" data-work-item-id={data.type==='approval'?data.taskId:typeof data.id==='string'?data.id:undefined} aria-label={label}><AvatarArtwork name={label}>{initials || '—'}</AvatarArtwork></span>;
+}
 
-const statusLabel: Record<WorkGraphStatus, string> = {
-  default: 'Ready', blocked: 'Blocked', waiting: 'Waiting', working: 'Working', completed: 'Completed', failed: 'Failed'
-};
+function titleForAria(data: GraphNodeData): string {
+  const kind = data.type === 'humanWork' ? 'Human work' : data.type === 'doatWork' ? 'Doat work' : data.type === 'approval' ? 'Approval' : 'Unassigned work';
+  return `${kind}: ${data.title}. ${ownerLabel(data)}. ${statusLabels[data.status]}.`;
+}
 
-/** Shared visual node. It intentionally contains no canvas, layout, or graph interaction. */
-export function GraphNode({ data, state }: GraphNodeProps): React.ReactElement {
-  const status = state === 'hover' || state === 'focus' || state === 'selected' || state === 'loading' ? data.status : state ?? data.status;
-  if (state === 'loading') {
-    return <div className="gwira-graph-node gwira-graph-node--loading" aria-label={`${typeLabel[data.type]} loading`} aria-busy="true">
-      <span className="gwira-graph-node__skeleton gwira-graph-node__skeleton--title" />
-      <span className="gwira-graph-node__skeleton gwira-graph-node__skeleton--subtitle" />
-      <span className="gwira-graph-node__skeleton gwira-graph-node__skeleton--status" />
+export function GraphNode({ data, display = 'full', appearance }: { data: GraphNodeData; display?: GraphNodeDisplay; appearance?: GraphNodeAppearance }): React.ReactElement {
+  const title = data.type === 'approval' ? `Approve: ${data.title}` : data.title;
+  const kind = data.type === 'humanWork' ? 'Human work' : data.type === 'doatWork' ? 'Doat work' : data.type === 'approval' ? 'Approval' : 'Unassigned work';
+  const label = `${titleForAria(data)}${data.description ? ` ${data.description}` : ''}`;
+  if (display === 'dot') {
+    return <div className={`gwira-work-node gwira-work-node--dot is-${data.status} ${appearance ? `is-${appearance}` : ''}`} data-work-item-id={data.type==='approval'?data.taskId:typeof data.id==='string'?data.id:undefined} aria-label={label} title={title}>
+      {ownerAvatar(data, 24)}<span className={`gwira-work-node__glyph is-${data.status}`} aria-hidden="true">{stateGlyph(data.status,data.runStatus==='running')}</span>
     </div>;
   }
-  return <div className={`gwira-graph-node gwira-graph-node--${data.type} gwira-graph-node--${status} ${state === 'hover' ? 'is-hovered' : ''} ${state === 'focus' ? 'is-focused' : ''} ${state === 'selected' ? 'is-selected' : ''}`} aria-label={`${typeLabel[data.type]}. ${data.title}. ${statusLabel[status]}. ${data.subtitle}.`} tabIndex={state === 'focus' ? 0 : undefined}>
-    <div className="gwira-graph-node__title" title={data.title}>{data.title}</div>
-    <div className="gwira-graph-node__subtitle" title={data.subtitle}>{data.subtitle}</div>
-    <div className="gwira-graph-node__status"><span aria-hidden="true" className="gwira-graph-node__glyph" />{statusLabel[status]}</div>
+  if (display === 'compact') {
+    return <div className={`gwira-work-node gwira-work-node--compact is-${data.status} ${appearance ? `is-${appearance}` : ''}`} data-work-item-id={data.type==='approval'?data.taskId:typeof data.id==='string'?data.id:undefined} aria-label={label} title={title}>
+      {ownerAvatar(data, 24)}<strong>{title}</strong><span className={`gwira-work-node__glyph is-${data.status}`} aria-hidden="true">{stateGlyph(data.status,data.runStatus==='running')}</span>
+    </div>;
+  }
+  return <div className={`gwira-work-node is-${data.status} is-${data.type} ${appearance ? `is-${appearance}` : ''}`} data-work-item-id={data.type==='approval'?data.taskId:typeof data.id==='string'?data.id:undefined} aria-label={label}>
+    {ownerAvatar(data)}
+    <span className="gwira-work-node__body">
+      {data.type === 'approval' ? <small className="gwira-work-node__kind">Approval</small> : <small className="gwira-work-node__kind">{kind}</small>}
+      <strong title={title}>{title}</strong>
+      <span className="gwira-work-node__meta">{ownerLabel(data)} · {statusLabels[data.status]}</span>
+    </span>
+    <span className={`gwira-work-node__glyph is-${data.status}`} aria-hidden="true">{stateGlyph(data.status,data.runStatus==='running')}</span>
   </div>;
-}
-
-/** Adapter keeps the one visual node component reusable without rendering a canvas here. */
-export function WorkGraphFlowNodeComponent({ data, selected }: NodeProps<WorkGraphFlowNode>): React.ReactElement {
-  return <GraphNode data={data} state={selected ? 'selected' : undefined} />;
 }

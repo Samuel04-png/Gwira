@@ -224,8 +224,11 @@ The app will open an Electron window. Add a project folder, select a model and r
 ## Development Commands
 
 ```bash
-# Start Vite + Electron in development mode
+# Start Vite + Electron against the isolated local Supabase (needs Docker and `supabase start`)
 npm run dev
+
+# Same, against the hosted Supabase project in .env.auth.local (needs the account-setup migration applied there)
+npm run dev:hosted
 
 # Type-check Electron, renderer, and tests
 npm run typecheck

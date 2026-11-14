@@ -1,170 +1,159 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import operationsIllustration from '../../assets/library/operations.png';
-import financeIllustration from '../../assets/library/finance.png';
-import hrIllustration from '../../assets/library/hr.png';
-import salesMarketingIllustration from '../../assets/library/sales_marketing.png';
-import customerSupportIllustration from '../../assets/library/customer_support.png';
-import policiesIllustration from '../../assets/library/policies.png';
-import sopsIllustration from '../../assets/library/sops.png';
-import reportsIllustration from '../../assets/library/reports.png';
+import { Icon, type IconName } from '../../components/Icon.js';
+import { CompactActionMenu, type CompactAction } from '../../components/CompactActionMenu.js';
+import { SidebarTooltip } from '../../components/SidebarTooltip.js';
+import { LIBRARY_PREFERENCES_KEY, LIBRARY_STORAGE_KEY, libraryFolderChoices, libraryTypeForName, parseLibraryRecords, readLibraryPreferences, removeLibraryRecord, selectLibraryRecords, type LibraryDocument, type LibraryPreferences, type LibraryTab, type LibraryType } from './libraryModel.js';
+import './library.css';
+const tabs: LibraryTab[] = ['Suggested','Favorites','Folders','Images','All'];
+const typeIcon = (type: LibraryType): IconName => type === 'Image' ? 'image' : type === 'Folder' ? 'folder' : type === 'Spreadsheet' ? 'table' : type === 'Presentation' ? 'presentation' : 'file';
+const timeLabel = (item: LibraryDocument): string => new Intl.DateTimeFormat(undefined,{dateStyle:'medium'}).format(new Date(item.updatedAt && Number.isFinite(Date.parse(item.updatedAt)) ? item.updatedAt : item.createdAt));
+type Editor = { kind:'create' | 'edit'; type: 'Doc' | 'Folder'; item?: LibraryDocument } | { kind:'rename' | 'move' | 'delete'; item: LibraryDocument };
 
-type LibraryTab = 'All' | 'Docs' | 'Files' | 'Folders';
-type LibraryFilter = 'recent' | 'favorites' | 'created' | 'shared' | 'private' | 'workspace' | 'assigned' | 'archived';
-type LibrarySort = 'updated' | 'name-asc' | 'name-desc' | 'created';
-type LibraryMenu = 'create' | 'filters' | 'sort' | undefined;
-
-interface LibraryDocument {
-  id: string;
-  title: string;
-  type: 'Doc' | 'PDF' | 'Spreadsheet' | 'Presentation' | 'Folder';
-  collection: string;
-  owner: string;
-  updated: string;
-  access: 'Workspace' | 'Private' | 'Shared';
-  doatAccess: string;
-  verified?: boolean;
-  description: string;
-  createdAt: string;
-  favorite?: boolean;
-  assigned?: boolean;
-  archived?: boolean;
+export function LibraryHeader({children}:{children?:React.ReactNode}):React.ReactElement {
+  return <header className="gw-library__header"><h1>Library</h1>{children}</header>;
 }
 
-const libraryStorageKey = 'gwira.library.records.v1';
-const defaultDocuments: LibraryDocument[] = [
-  { id: 'operations-handbook', title: 'Operations handbook', type: 'Doc', collection: 'Operations', owner: 'Maya Chen', updated: 'Today, 09:42', access: 'Workspace', doatAccess: 'Operations Doats', verified: true, favorite: true, description: 'How Gwira runs day-to-day operations, ownership and handoffs.', createdAt: '2026-10-15T09:42:00.000Z' },
-  { id: 'customer-escalations', title: 'Customer escalation playbook', type: 'Doc', collection: 'Customer Support', owner: 'Amara Banda', updated: 'Yesterday', access: 'Shared', doatAccess: 'Support Doats', verified: true, assigned: true, description: 'Triage paths, response commitments and escalation owners.', createdAt: '2026-10-14T12:00:00.000Z' },
-  { id: 'fy26-budget', title: 'FY26 budget assumptions', type: 'Spreadsheet', collection: 'Finance', owner: 'Noah Patel', updated: 'Oct 12', access: 'Private', doatAccess: 'No access', description: 'Planning assumptions and approved financial scenarios.', createdAt: '2026-10-12T09:00:00.000Z' },
-  { id: 'security-policy', title: 'Information security policy', type: 'PDF', collection: 'Policies', owner: 'Maya Chen', updated: 'Oct 10', access: 'Workspace', doatAccess: 'All Doats', verified: true, description: 'The source of truth for handling company information.', createdAt: '2026-10-10T09:00:00.000Z' },
-  { id: 'onboarding-sop', title: 'New hire onboarding SOP', type: 'Doc', collection: 'SOPs', owner: 'Amara Banda', updated: 'Oct 08', access: 'Workspace', doatAccess: 'People Doats', description: 'A practical checklist for a consistent first week.', createdAt: '2026-10-08T09:00:00.000Z' },
-  { id: 'q3-review', title: 'Q3 customer insights report', type: 'Presentation', collection: 'Reports', owner: 'Noah Patel', updated: 'Sep 30', access: 'Shared', doatAccess: 'Research Doats', description: 'Themes, trends, and opportunities from customer feedback.', createdAt: '2026-09-30T09:00:00.000Z' }
-];
-
-const collections = [
-  { image: operationsIllustration, title: 'Operations', description: 'Runbooks and operational knowledge' },
-  { image: financeIllustration, title: 'Finance', description: 'Plans, budgets and reporting' },
-  { image: hrIllustration, title: 'HR', description: 'People, onboarding and hiring' },
-  { image: salesMarketingIllustration, title: 'Sales & Marketing', description: 'Go-to-market playbooks' },
-  { image: customerSupportIllustration, title: 'Customer Support', description: 'Customer guidance and answers' },
-  { image: policiesIllustration, title: 'Policies', description: 'Approved company standards' },
-  { image: sopsIllustration, title: 'SOPs', description: 'Repeatable ways of working' },
-  { image: reportsIllustration, title: 'Reports', description: 'Business reviews and analysis' }
-] as const;
-
-const tabs: LibraryTab[] = ['All', 'Docs', 'Files', 'Folders'];
-
-function typeIcon(type: LibraryDocument['type']): string {
-  return type === 'Folder' ? '□' : type === 'PDF' ? 'PDF' : type === 'Spreadsheet' ? '▦' : type === 'Presentation' ? '▣' : '▤';
-}
-
-function loadLibraryRecords(): LibraryDocument[] {
-  try {
-    const stored = JSON.parse(localStorage.getItem(libraryStorageKey) ?? 'null');
-    if (Array.isArray(stored) && stored.every((item) => typeof item?.id === 'string' && typeof item.title === 'string' && typeof item.type === 'string' && typeof item.createdAt === 'string')) return stored as LibraryDocument[];
-  } catch { /* use the initial sample knowledge */ }
-  return defaultDocuments;
-}
-
-function filterLabel(filter: LibraryFilter): string {
-  return ({ recent: 'Recent', favorites: 'Favorites', created: 'Created by Me', shared: 'Shared with Me', private: 'Private', workspace: 'Workspace', assigned: 'Assigned', archived: 'Archived' })[filter];
-}
-
-function emptyStateCopy({ allCount, filters, query, collectionFilter }: { allCount: number; filters: ReadonlySet<LibraryFilter>; query: string; collectionFilter?: string }): { title: string; detail: string; clear: boolean } {
-  if (allCount === 0) return { title: 'Your Library is ready.', detail: 'Create a document, add a folder, or upload a file to start building your company knowledge.', clear: false };
-  if (query.trim()) return { title: 'No matching documents.', detail: 'Try a different search or clear the current filters.', clear: true };
-  if (filters.has('favorites')) return { title: 'No favorites yet.', detail: 'Save important knowledge to find it quickly here.', clear: true };
-  if (filters.has('shared')) return { title: 'Nothing shared with you.', detail: 'Shared documents will appear here when your team adds you.', clear: true };
-  if (collectionFilter) return { title: `No items in ${collectionFilter}.`, detail: 'Choose another collection or create the first item.', clear: true };
-  return { title: 'No matching documents.', detail: 'Try another tab or clear the current filters.', clear: true };
-}
-
-export function LibraryPage(): React.ReactElement {
-  const [tab, setTab] = useState<LibraryTab>('All');
-  const [query, setQuery] = useState('');
-  const [filters, setFilters] = useState<Set<LibraryFilter>>(() => new Set());
-  const [filterDraft, setFilterDraft] = useState<Set<LibraryFilter>>(() => new Set());
-  const [collectionFilter, setCollectionFilter] = useState<string | undefined>();
-  const [sort, setSort] = useState<LibrarySort>('updated');
-  const [selectedId, setSelectedId] = useState<string | undefined>();
-  const [openDocument, setOpenDocument] = useState<LibraryDocument | undefined>();
-  const [openMenu, setOpenMenu] = useState<LibraryMenu>();
-  const [documents, setDocuments] = useState<LibraryDocument[]>(loadLibraryRecords);
-  const createRef = useRef<HTMLDivElement>(null);
-  const filtersRef = useRef<HTMLDivElement>(null);
-  const sortRef = useRef<HTMLDivElement>(null);
-  const sortMenuRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => { localStorage.setItem(libraryStorageKey, JSON.stringify(documents)); }, [documents]);
-
+export function LibraryPage({authenticated=false}:{authenticated?:boolean}={}): React.ReactElement {
+  const [records,setRecords] = useState<LibraryDocument[]>([]), [loading,setLoading] = useState(true), [loadError,setLoadError] = useState(''), [error,setError] = useState(''), [notice,setNotice] = useState(''), [busy,setBusy] = useState(false);
+  const [tab,setTab] = useState<LibraryTab>('Suggested'), [query,setQuery] = useState(''), [type,setType] = useState<LibraryType>(), [collection,setCollection] = useState<string>(), [archived,setArchived] = useState(false), [folderId,setFolderId] = useState<string>();
+  const [preferences,setPreferences] = useState<LibraryPreferences>(() => { if(authenticated)return readLibraryPreferences(null);try { return readLibraryPreferences(localStorage.getItem(LIBRARY_PREFERENCES_KEY)); } catch { return readLibraryPreferences(null); } });
+  const [selectedId,setSelectedId] = useState<string>(), [editor,setEditor] = useState<Editor>();
+  const [columns,setColumns] = useState(1);
+  const originId = useRef<string | undefined>(undefined);
+  const root = useRef<HTMLElement>(null), origin = useRef<HTMLElement | null>(null);
+  const load = (): void => { if(authenticated){setLoading(false);return;}setLoading(true); try { setRecords(parseLibraryRecords(localStorage.getItem(LIBRARY_STORAGE_KEY))); setLoadError(''); } catch (value) { setLoadError(value instanceof Error ? value.message : 'Library could not be loaded. Check storage access and retry.'); } finally { setLoading(false); } };
+  useEffect(load,[]);
   useEffect(() => {
-    const closeOnOutsidePointer = (event: PointerEvent): void => {
-      const target = event.target as Node;
-      if (![createRef, filtersRef, sortRef].some((ref) => ref.current?.contains(target))) setOpenMenu(undefined);
-    };
-    const closeOnEscape = (event: KeyboardEvent): void => { if (event.key === 'Escape') setOpenMenu(undefined); };
-    document.addEventListener('pointerdown', closeOnOutsidePointer);
-    document.addEventListener('keydown', closeOnEscape);
-    return () => { document.removeEventListener('pointerdown', closeOnOutsidePointer); document.removeEventListener('keydown', closeOnEscape); };
+    const element = root.current;
+    if (!element) return;
+    const observer = new ResizeObserver(() => {
+      const style = getComputedStyle(element), gap = parseFloat(style.getPropertyValue('--gw-space-4'));
+      const available = element.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+      const card = parseFloat(style.getPropertyValue('--gw-library-card-width'));
+      setColumns(Math.max(1, Math.floor((available + gap) / (card + gap))));
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
   }, []);
-
-  const visibleDocuments = useMemo(() => documents.filter((doc) => {
-    const matchesQuery = `${doc.title} ${doc.collection} ${doc.owner}`.toLowerCase().includes(query.trim().toLowerCase());
-    const matchesTab = tab === 'All' || (tab === 'Docs' && doc.type === 'Doc') || (tab === 'Files' && ['PDF', 'Spreadsheet', 'Presentation'].includes(doc.type)) || (tab === 'Folders' && doc.type === 'Folder');
-    const matchesFilter = [...filters].every((filter) => (filter === 'recent' && Date.now() - Date.parse(doc.createdAt) <= 7 * 24 * 60 * 60 * 1000) || (filter === 'favorites' && doc.favorite) || (filter === 'created' && doc.owner === 'You') || (filter === 'shared' && doc.access === 'Shared') || (filter === 'private' && doc.access === 'Private') || (filter === 'workspace' && doc.access === 'Workspace') || (filter === 'assigned' && doc.assigned) || (filter === 'archived' && doc.archived));
-    return matchesQuery && matchesTab && matchesFilter && (!collectionFilter || doc.collection === collectionFilter);
-  }).sort((left, right) => sort === 'name-asc' ? left.title.localeCompare(right.title) : sort === 'name-desc' ? right.title.localeCompare(left.title) : sort === 'created' ? Date.parse(right.createdAt) - Date.parse(left.createdAt) : Date.parse(right.createdAt) - Date.parse(left.createdAt)), [collectionFilter, documents, filters, query, sort, tab]);
-
-  function addRecord(type: LibraryDocument['type']): void {
-    const now = new Date();
-    const label = type === 'Folder' ? 'Untitled folder' : type === 'PDF' ? 'Uploaded file' : 'Untitled document';
-    const next: LibraryDocument = { id: crypto.randomUUID(), title: label, type, collection: 'Unsorted', owner: 'You', updated: 'Just now', access: 'Private', doatAccess: 'No access', description: type === 'Folder' ? 'A new place to organize knowledge.' : 'A new Library item.', createdAt: now.toISOString() };
-    setDocuments((current) => [next, ...current]);
-    setTab(type === 'Folder' ? 'Folders' : type === 'Doc' ? 'Docs' : 'Files');
-    setFilters(new Set()); setFilterDraft(new Set()); setCollectionFilter(undefined); setQuery(''); setOpenMenu(undefined);
-    if (type === 'Doc') setOpenDocument(next);
-  }
-
-  function clearFilters(): void { setFilters(new Set()); setFilterDraft(new Set()); setCollectionFilter(undefined); setQuery(''); setTab('All'); }
-  function toggleDraftFilter(value: LibraryFilter): void { setFilterDraft((current) => { const next = new Set(current); next.has(value) ? next.delete(value) : next.add(value); return next; }); }
-  function applyFilters(): void { setFilters(new Set(filterDraft)); setOpenMenu(undefined); }
-  function handleSortMenuKeyDown(event: React.KeyboardEvent<HTMLDivElement>): void {
-    const items = [...event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]')];
-    const currentIndex = items.indexOf(document.activeElement as HTMLButtonElement);
-    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-      event.preventDefault();
-      const direction = event.key === 'ArrowDown' ? 1 : -1;
-      items[(currentIndex + direction + items.length) % items.length]?.focus();
-    } else if (event.key === 'Home' || event.key === 'End') {
-      event.preventDefault();
-      items[event.key === 'Home' ? 0 : items.length - 1]?.focus();
+  const save = (next: LibraryDocument[], message: string): boolean => {
+    if(authenticated){setError('Library storage is not connected for authenticated workspaces.');return false;}
+    if (loadError) { setError('Library storage must be recovered before you can save changes.'); return false; }
+    try { localStorage.setItem(LIBRARY_STORAGE_KEY,JSON.stringify(next)); setRecords(next); setError(''); setNotice(message); return true; }
+    catch { setError('Library changes could not be saved. Free device storage or check storage permissions, then try again.'); return false; }
+  };
+  const patchPreferences = (patch: Partial<LibraryPreferences>): void => { const next = {...preferences,...patch}; if(authenticated){setPreferences(next);return;}try { localStorage.setItem(LIBRARY_PREFERENCES_KEY,JSON.stringify(next)); setPreferences(next); setError(''); } catch { setError('Display settings could not be saved. Check device storage and try again.'); } };
+  const [pointerInside,setPointerInside] = useState(false);
+  const previousOrder = useRef<string[]>([]);
+  const visible = useMemo(() => {
+    const next = selectLibraryRecords(records,{tab,query,folderId,type,collection,archived,sort:preferences.sort});
+    if (pointerInside) {
+      const positions = new Map(previousOrder.current.map((id,index)=>[id,index]));
+      next.sort((a,b)=>(positions.get(a.id)??Infinity)-(positions.get(b.id)??Infinity));
     }
+    previousOrder.current = next.map(item=>item.id);
+    return next;
+  },[records,tab,query,folderId,type,collection,archived,preferences.sort,pointerInside]);
+  // Distribute sorted items across columns, so the most relevant records begin at
+  // the top rather than vanishing below a long, vertically filled CSS column.
+  const groups: LibraryDocument[][] = Array.from({length:preferences.view==='grid'?columns:1},()=>[]);
+  const heights = groups.map(()=>0);
+  for (const item of visible) {
+    const target = heights.indexOf(Math.min(...heights));
+    groups[target]!.push(item);
+    heights[target]! += item.type==='Folder'?128:item.type==='Image'?200:260;
   }
-  const emptyCopy = emptyStateCopy({ allCount: documents.length, filters, query, collectionFilter });
-  const sortLabel = ({ updated: 'Last updated', 'name-asc': 'Name A–Z', 'name-desc': 'Name Z–A', created: 'Date created' })[sort];
-  const filterOptions: { group: string; items: LibraryFilter[] }[] = [{ group: 'Quick access', items: ['recent', 'favorites', 'created'] }, { group: 'Access', items: ['shared', 'private', 'workspace'] }, { group: 'Status', items: ['assigned', 'archived'] }];
-
-  if (openDocument) return <LibraryDocumentView document={openDocument} onBack={() => setOpenDocument(undefined)} />;
-
-  return <section className="gwira-library" aria-label="Library">
-    <header className="library-header">
-      <div><p className="library-eyebrow">Knowledge hub</p><h1>Library</h1><p>Store files, documents, and business knowledge.</p></div>
-      <div className="library-actions"><div className="library-create" ref={createRef}><button type="button" className="library-create-primary" onClick={() => addRecord('Doc')}><span>＋</span> Create</button><button type="button" className="library-create-toggle" aria-label="Create options" aria-expanded={openMenu === 'create'} onClick={() => setOpenMenu((current) => current === 'create' ? undefined : 'create')}>⌄</button>{openMenu === 'create' ? <div className="library-dropdown library-create-menu" role="menu"><button type="button" role="menuitem" onClick={() => addRecord('Doc')}>New document</button><button type="button" role="menuitem" onClick={() => addRecord('Folder')}>New folder</button><button type="button" role="menuitem" onClick={() => addRecord('PDF')}>Upload files</button><button type="button" role="menuitem" disabled title="Import is not implemented yet.">Import</button></div> : null}</div></div>
-    </header>
-
-    <section className="library-collections" aria-labelledby="library-collections-heading"><div className="library-section-title"><div><h2 id="library-collections-heading">Collections</h2><p>Browse knowledge by the teams and systems that use it.</p></div><button type="button" className="library-text-button" disabled title="Collection management is not implemented yet.">Manage collections</button></div><div className="library-collection-grid">{collections.map((collection) => <button type="button" key={collection.title} className={`library-collection-card ${collectionFilter === collection.title ? 'is-selected' : ''}`} aria-pressed={collectionFilter === collection.title} onClick={() => setCollectionFilter((current) => current === collection.title ? undefined : collection.title)}><CollectionIllustration src={collection.image} label={collection.title} /><span><strong>{collection.title}</strong><small>{collection.description}</small></span></button>)}</div></section>
-
-    <section className="library-index" aria-label="Library index">
-      <div className="library-index-toolbar"><div className="library-tabs" role="tablist">{tabs.map((item) => <button key={item} type="button" role="tab" aria-selected={tab === item} className={tab === item ? 'active' : ''} onClick={() => setTab(item)}>{item}</button>)}</div><div className="library-controls"><label><span>⌕</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search library..." aria-label="Search library" /></label><div className="library-filter" ref={filtersRef}><button type="button" className={filters.size || collectionFilter ? 'active' : ''} aria-expanded={openMenu === 'filters'} onClick={() => { setFilterDraft(new Set(filters)); setOpenMenu((current) => current === 'filters' ? undefined : 'filters'); }}>☷ Filters{filters.size ? ` (${filters.size})` : ''}</button>{openMenu === 'filters' ? <div className="library-dropdown library-filter-menu"><div className="library-filter-options">{filterOptions.map(({ group, items }) => <fieldset key={group}><legend>{group}</legend>{items.map((value) => <label key={value}><input type="checkbox" checked={filterDraft.has(value)} onChange={() => toggleDraftFilter(value)} />{filterLabel(value)}</label>)}</fieldset>)}</div><footer><button type="button" onClick={() => { setFilterDraft(new Set()); setFilters(new Set()); }}>Clear</button><button type="button" className="library-apply-button" onClick={applyFilters}>Apply</button></footer></div> : null}</div><div className="library-sort-control" ref={sortRef}><button type="button" aria-label="Sort library" aria-expanded={openMenu === 'sort'} onClick={() => setOpenMenu((current) => { const next = current === 'sort' ? undefined : 'sort'; if (next) queueMicrotask(() => sortMenuRef.current?.querySelector<HTMLButtonElement>('[aria-checked="true"]')?.focus()); return next; })}>{sortLabel}<span>⌄</span></button>{openMenu === 'sort' ? <div className="library-dropdown library-sort-menu" ref={sortMenuRef} role="menu" onKeyDown={handleSortMenuKeyDown}>{(['updated', 'name-asc', 'name-desc', 'created'] as const).map((value) => <button type="button" key={value} role="menuitemradio" aria-checked={sort === value} className={sort === value ? 'active' : ''} onClick={() => { setSort(value); setOpenMenu(undefined); }}><span>{({ updated: 'Last updated', 'name-asc': 'Name A–Z', 'name-desc': 'Name Z–A', created: 'Date created' })[value]}</span>{sort === value ? <b aria-hidden="true">✓</b> : null}</button>)}</div> : null}</div></div></div>
-      {filters.size || collectionFilter ? <div className="library-filter-chips">{[...filters].map((filter) => <span key={filter}>{filterLabel(filter)}<button type="button" aria-label={`Remove ${filterLabel(filter)} filter`} onClick={() => setFilters((current) => { const next = new Set(current); next.delete(filter); return next; })}>×</button></span>)}{collectionFilter ? <span>{collectionFilter}<button type="button" aria-label={`Remove ${collectionFilter} filter`} onClick={() => setCollectionFilter(undefined)}>×</button></span> : null}<button type="button" onClick={clearFilters}>Clear filters</button></div> : null}
-      {visibleDocuments.length === 0 ? <div className="library-empty"><span>▤</span><h2>{emptyCopy.title}</h2><p>{emptyCopy.detail}</p>{emptyCopy.clear ? <button type="button" onClick={clearFilters}>Clear filters</button> : <button type="button" className="library-primary" onClick={() => addRecord('Doc')}>Create document</button>}</div> : <div className="library-table-wrap"><table className="library-table"><thead><tr><th>Name</th><th>Collection</th><th>Updated</th><th>Access</th><th aria-label="Actions" /></tr></thead><tbody>{visibleDocuments.map((doc) => <tr key={doc.id} className={selectedId === doc.id ? 'selected' : ''} onClick={() => setSelectedId(doc.id)}><td><button type="button" className="library-document-title" onClick={(event) => { event.stopPropagation(); setOpenDocument(doc); }}><span className={`doc-type-icon ${doc.type.toLowerCase()}`}>{typeIcon(doc.type)}</span><span><strong>{doc.title}{doc.verified ? <i title="Verified source of truth">✓</i> : null}</strong><small>{doc.description}</small></span></button></td><td><span className="collection-chip">{doc.collection}</span></td><td>{doc.updated}</td><td><span className={`access-badge ${doc.access.toLowerCase()}`}>{doc.access}</span></td><td><button type="button" className="library-row-menu" aria-label={`Actions for ${doc.title}`} onClick={(event) => event.stopPropagation()}>•••</button></td></tr>)}</tbody></table></div>}
-    </section>
+  const selected = records.find(item => item.id === selectedId), folder = records.find(item => item.id === folderId && item.type === 'Folder');
+  const collections = [...new Set(records.map(item => item.collection).filter(Boolean))].sort();
+  const restoreFocus = (): void => { const item = [...(root.current?.querySelectorAll<HTMLButtonElement>('[data-library-item]')??[])].find(element=>element.dataset.libraryItem===originId.current); (item??(origin.current?.isConnected?origin.current:root.current?.querySelector<HTMLButtonElement>('button')))?.focus(); };
+  const edit = (next: Editor): void => { originId.current = 'item'in next?next.item?.id:undefined; origin.current = document.activeElement as HTMLElement; setError(''); setEditor(next); };
+  const closeDialog = (): void => { setEditor(undefined); setSelectedId(undefined); requestAnimationFrame(restoreFocus); };
+  const open = (item: LibraryDocument, trigger?: HTMLElement): void => { originId.current = item.id; origin.current = trigger ?? document.activeElement as HTMLElement; if (item.type === 'Folder') { setFolderId(item.id); setTab('All'); setQuery(''); } else setSelectedId(item.id); };
+  const toggleFavorite = (item: LibraryDocument): void => { save(records.map(record => record.id === item.id ? {...record,favorite:!record.favorite} : record), item.favorite ? 'Removed from Favorites.' : 'Added to Favorites.'); };
+  const reveal = async (item: LibraryDocument): Promise<void> => { if (!item.path) return; setNotice('Opening the file location…'); try { await window.codexDesktop.openExternalTarget({target:item.path}); setNotice('File location requested.'); } catch { setError('The original file could not be located. Check that it is still available on this device.'); } };
+  const importFiles = async (): Promise<void> => {
+    if(authenticated){setError('Adding local files is unavailable in authenticated workspaces.');return;}
+    if (busy || loadError) return;
+    setBusy(true); setNotice('Choose files to add to Library…'); setError('');
+    try {
+      const result = await window.codexDesktop.selectFiles();
+      if (result.canceled) { setNotice(''); return; }
+      const now = new Date().toISOString();
+      const paths = new Set(records.map(item => item.path).filter(Boolean));
+      const imported: LibraryDocument[] = [];
+      for (const file of result.files) { if (paths.has(file.path)) continue; paths.add(file.path); imported.push({id:crypto.randomUUID(),title:file.name,type:libraryTypeForName(file.name),collection:folder?.title ?? 'Unsorted',owner:'',updated:now,updatedAt:now,createdAt:now,access:'Private',doatAccess:'',description:'',path:file.path,parentId:folderId}); }
+      if (!imported.length) { setNotice('These files are already in Library.'); return; }
+      if (save([...imported,...records],`${imported.length} file${imported.length === 1 ? '' : 's'} added to this device’s Library.`)) { setTab('All'); setQuery(''); setType(undefined); setArchived(false); }
+    } catch { setError('Files could not be added. Choose local files that are accessible on this device and retry.'); }
+    finally { setBusy(false); }
+  };
+  const actions = (item: LibraryDocument): CompactAction[] => [
+    {label:'Open',icon:typeIcon(item.type),onSelect:()=>open(item)},
+    {label:item.favorite?'Remove from Favorites':'Add to Favorites',icon:'bookmark',onSelect:()=>toggleFavorite(item)},
+    ...(item.type === 'Doc' && !item.path ? [{label:'Edit document',icon:'new-work' as const,onSelect:()=>edit({kind:'edit',type:'Doc',item})}] : []),
+    {label:'Rename',icon:'new-work',onSelect:()=>edit({kind:'rename',item})},
+    {label:'Move to folder',icon:'folder',onSelect:()=>edit({kind:'move',item})},
+    ...(item.path ? [{label:'Show in folder',icon:'external' as const,onSelect:()=>{void reveal(item);}}] : []),
+    {label:item.archived?'Unarchive':'Archive',icon:'archive',onSelect:()=>{save(records.map(record=>record.id===item.id?{...record,archived:!item.archived}:record),item.archived?'Item restored.':'Item archived. Find it in Filters → Archived.');}},
+    {label:'Remove from Library',icon:'trash',onSelect:()=>edit({kind:'delete',item})},
+  ];
+  const filters: CompactAction[] = [
+    {label:'All file types',checked:!type,onSelect:()=>setType(undefined)},
+    ...(['Doc','Image','PDF','Spreadsheet','Presentation','Folder','File'] as const).map(value=>({label:value==='Doc'?'Documents':value==='Image'?'Images':value,checked:type===value,onSelect:()=>setType(value)})),
+    {label:'Archived',checked:archived,checkType:'checkbox',onSelect:()=>setArchived(!archived)},
+    ...collections.map(value=>({label:`Collection: ${value}`,checked:collection===value,onSelect:()=>setCollection(collection===value?undefined:value)})),
+    {label:'Clear filters',onSelect:()=>{setType(undefined);setCollection(undefined);setArchived(false);setQuery('');}},
+  ];
+  const display: CompactAction[] = [
+    {label:'Recently updated',checked:preferences.sort==='updated',onSelect:()=>patchPreferences({sort:'updated'})},
+    {label:'Recently created',checked:preferences.sort==='created',onSelect:()=>patchPreferences({sort:'created'})},
+    {label:'Name A–Z',checked:preferences.sort==='name-asc',onSelect:()=>patchPreferences({sort:'name-asc'})},
+    {label:'Name Z–A',checked:preferences.sort==='name-desc',onSelect:()=>patchPreferences({sort:'name-desc'})},
+    {label:'Show image names',checked:preferences.showNames,checkType:'checkbox',onSelect:()=>patchPreferences({showNames:!preferences.showNames})},
+  ];
+  const reset = (): void => { setQuery('');setType(undefined);setCollection(undefined);setArchived(false);setTab('All'); };
+  const listKeys = (event: React.KeyboardEvent): void => { const items=[...event.currentTarget.querySelectorAll<HTMLButtonElement>('[data-library-item]')], index=items.indexOf(document.activeElement as HTMLButtonElement);if(index<0)return;if(event.key==='Enter'||event.key===' '){event.preventDefault();const item=records.find(record=>record.id===items[index]?.dataset.libraryItem);if(item)open(item,items[index]);return;}if(['ArrowDown','ArrowUp','ArrowLeft','ArrowRight','Home','End'].includes(event.key)){event.preventDefault();items[event.key==='Home'?0:event.key==='End'?items.length-1:(index+(['ArrowUp','ArrowLeft'].includes(event.key)?-1:1)+items.length)%items.length]?.focus();} };
+  return <section className="gw-library" aria-label="Library" ref={root} aria-busy={busy||loading} data-testid="library-page">
+    <LibraryHeader><div className="gw-library__toolbar">
+      <CompactActionMenu label="Filter library" icon="filter" actions={filters}/>
+      <div className="gw-library__views" role="group" aria-label="Library layout"><button type="button" aria-label="Grid view" aria-pressed={preferences.view==='grid'} onClick={()=>patchPreferences({view:'grid'})}><Icon name="grid"/></button><button type="button" aria-label="List view" aria-pressed={preferences.view==='list'} onClick={()=>patchPreferences({view:'list'})}><Icon name="list"/></button></div>
+      <label className="gw-library__search"><Icon name="search"/><input type="search" aria-label="Search library" placeholder="Search library" value={query} onChange={event=>setQuery(event.target.value)}/></label>
+      <CompactActionMenu label="New library item" triggerText="New" icon="chevron-down" className="gw-library__new" actions={[{label:'New document',icon:'file',disabled:authenticated||!!loadError,reason:authenticated?'Library storage is not connected.':'Library storage must be recovered before adding items.',onSelect:()=>edit({kind:'create',type:'Doc'})},{label:'New folder',icon:'folder',disabled:authenticated||!!loadError,reason:authenticated?'Library storage is not connected.':'Library storage must be recovered before adding items.',onSelect:()=>edit({kind:'create',type:'Folder'})},{label:'Add files',icon:'attachment',disabled:authenticated||busy||!!loadError,reason:authenticated?'Local file access is unavailable.':'Wait for the current operation or recover Library storage.',onSelect:()=>{void importFiles();}}]}/>
+      <CompactActionMenu label="Library display options" icon="views" actions={display}/>
+    </div></LibraryHeader>
+    <div className="gw-library__tabs" role="tablist" aria-label="Library categories">{tabs.map((value,index)=><button type="button" key={value} role="tab" aria-selected={tab===value} tabIndex={tab===value?0:-1} onClick={()=>setTab(value)} onKeyDown={event=>{if(['ArrowLeft','ArrowRight','Home','End'].includes(event.key)){event.preventDefault();const target=event.key==='Home'?0:event.key==='End'?tabs.length-1:(index+(event.key==='ArrowRight'?1:-1)+tabs.length)%tabs.length;setTab(tabs[target]!);event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('button')[target]?.focus();}}}>{value}</button>)}</div>
+    {folder?<nav className="gw-library__breadcrumb" aria-label="Library folder"><button type="button" onClick={()=>{setFolderId(folder.parentId);setQuery('');}}><Icon name="back"/>{folder.parentId?records.find(item=>item.id===folder.parentId)?.title??'Library':'Library'}</button><span>/</span><span>{folder.title}</span></nav>:null}
+    {type||collection||archived?<div className="gw-library__applied"><span>{[type,collection,archived?'Archived':null].filter(Boolean).join(' · ')}</span><button type="button" onClick={reset}>Clear filters</button></div>:null}
+    <div role="status" className="gw-library__notice">{notice}</div>
+    {error?<div className="gw-library__error" role="alert">{error}<button type="button" onClick={()=>setError('')}>Dismiss</button></div>:null}
+    {loading?<div className="gw-library__empty" role="status">Loading Library…</div>:loadError?<div className="gw-library__empty" role="alert"><Icon name="failed"/><h2>Library could not be loaded</h2><p>{loadError}</p><button type="button" onClick={load}>Retry</button></div>:!visible.length?<div className="gw-library__empty"><Icon name={tab==='Images'?'image':tab==='Favorites'?'bookmark':'library'} size={20}/><h2>{authenticated?'Library is unavailable':records.length?'Nothing here yet':'Your Library starts here'}</h2><p>{authenticated?'Workspace library data is not connected yet. Plans remain available from their conversations.':records.length?'Try another category, search or filter.':'Add files, create a document, or organize your work in folders.'}</p>{authenticated?null:records.length?<button type="button" onClick={()=>{reset();setFolderId(undefined);}}>Show all items</button>:<button type="button" onClick={()=>{void importFiles();}}>Add files</button>}</div>:<div className={`gw-library__items is-${preferences.view}`} onKeyDown={listKeys} onPointerEnter={()=>setPointerInside(true)} onPointerLeave={()=>setPointerInside(false)} aria-label="Saved Library items">{groups.map((items,column)=><div className="gw-library__column" key={column}>{items.map(item=><article className={`gw-library__card is-${item.type.toLowerCase()}`} key={item.id}>
+      <SidebarTooltip label={`${item.title} · ${item.type} · ${item.collection}`} placement="bottom" className="gw-library__card-host"><button type="button" data-library-item={item.id} aria-label={`Open ${item.title}`} onClick={event=>open(item,event.currentTarget)}>
+        {item.type==='Image'&&item.path?<LibraryImage path={item.path} label={item.title}/>:<><div className="gw-library__card-title"><Icon name={typeIcon(item.type)}/><span>{item.title}</span></div><div className="gw-library__paper">{item.type==='Doc'&&item.content?<><p>{item.content}</p><span className="gw-library__file-glyph is-list-only"><Icon name={typeIcon(item.type)} size={20}/></span></>:<span className="gw-library__file-glyph"><Icon name={typeIcon(item.type)} size={20}/></span>}</div></>}
+        <div className={`gw-library__caption${preferences.showNames?' show-names':''}`}><strong>{item.title}</strong><small>{item.type} · {timeLabel(item)}</small></div>
+      </button></SidebarTooltip>
+      <div className="gw-library__card-actions"><button type="button" aria-label={`${item.favorite?'Remove from':'Add to'} Favorites: ${item.title}`} aria-pressed={!!item.favorite} onClick={()=>toggleFavorite(item)}><Icon name="bookmark"/></button><CompactActionMenu label={`Actions for ${item.title}`} actions={actions(item)}/></div>
+    </article>)}</div>)}</div>}
+    {!authenticated&&<footer className="gw-library__footer">Saved on this device. Imported files remain at their original location.</footer>}
+    {selected?<LibraryDialog label={selected.title} onClose={closeDialog}><header><div><small>{selected.type} · {timeLabel(selected)}</small><h2>{selected.title}</h2></div><button type="button" aria-label="Close preview" onClick={closeDialog}><Icon name="close"/></button></header>{selected.type==='Image'&&selected.path?<LibraryImage path={selected.path} label={selected.title} full/>:selected.type==='Doc'&&selected.content?<div className="gw-library-dialog__content">{selected.content}</div>:<div className="gw-library-dialog__unavailable"><Icon name={typeIcon(selected.type)} size={20}/><p>{selected.description||'No preview content is stored for this item.'}</p>{selected.path?<p>Open its location to view it with an application on this device.</p>:null}</div>}<dl><div><dt>Collection</dt><dd>{selected.collection}</dd></div>{selected.owner?<div><dt>Recorded owner</dt><dd>{selected.owner}</dd></div>:null}{selected.path?<div><dt>Original file</dt><dd>{selected.path}</dd></div>:null}</dl><footer><button type="button" onClick={()=>toggleFavorite(selected)}>{selected.favorite?'Remove from Favorites':'Add to Favorites'}</button>{selected.type==='Doc'&&!selected.path?<button type="button" onClick={()=>{setSelectedId(undefined);edit({kind:'edit',type:'Doc',item:selected});}}>Edit document</button>:null}{selected.path?<button type="button" onClick={()=>{void reveal(selected);}}>Show in folder</button>:null}</footer></LibraryDialog>:null}
+    {editor?<LibraryEditor key={`${editor.kind}:${'item'in editor?editor.item?.id??'new':'new'}`} editor={editor} records={records} folderId={folderId} onClose={closeDialog} onSave={save} onSaved={()=>{setEditor(undefined);requestAnimationFrame(restoreFocus);}}/>:null}
   </section>;
 }
 
-function CollectionIllustration({ src, label }: { src: string; label: string }): React.ReactElement {
-  return <span className="collection-illustration" title={label}><img src={src} alt="" aria-hidden="true" /></span>;
+function LibraryImage({path,label,full=false}:{path:string;label:string;full?:boolean}):React.ReactElement {
+  const [url,setUrl]=useState<string>(),[failure,setFailure]=useState('');
+  useEffect(()=>{let alive=true;setUrl(undefined);setFailure('');void window.codexDesktop.readLocalImage({path}).then(result=>{if(!alive)return;if(result.dataUrl)setUrl(result.dataUrl);else setFailure('The original image is no longer available.');}).catch(()=>{if(alive)setFailure('Image could not be read. Check that the original file is accessible.');});return()=>{alive=false;};},[path]);
+  return failure?<div className="gw-library__image-error"><Icon name="image"/><span>{failure}</span><span>Use Show in folder to locate the original.</span></div>:url?<img className={full?'gw-library__image is-full':'gw-library__image'} src={url} alt={label} loading="lazy" onError={()=>setFailure('This image format cannot be previewed here.')}/>:<span className="gw-library__image-loading" role="status">Loading image…</span>;
 }
-
-function LibraryDocumentView({ document, onBack }: { document: LibraryDocument; onBack: () => void }): React.ReactElement {
-  return <article className="gwira-document" aria-label={document.title}><header className="document-topbar"><button type="button" onClick={onBack}>← Library</button><div><button type="button">☆ Save</button><button type="button">Share</button><button type="button" className="library-primary">Edit</button></div></header><div className="document-cover"><span>▤</span><small>{document.collection} knowledge</small></div><div className="document-page"><div className="document-status"><span className={document.verified ? 'verified' : ''}>{document.verified ? '✓ Verified source of truth' : 'Working knowledge'}</span><span>Updated {document.updated}</span></div><h1>{document.title}</h1><div className="document-meta"><span><b>Owner</b> {document.owner}</span><span><b>Access</b> {document.access}</span><span><b>Doat access</b> {document.doatAccess}</span></div><p className="document-lead">{document.description} This living document gives the team a reliable, clear starting point for consistent work.</p><h2>Purpose</h2><p>Use this guidance whenever the team needs a shared decision framework. It captures the approved process, explains who owns each step, and identifies when to involve another team.</p><h2>How we work</h2><ul><li>Start with the current customer or business context.</li><li>Follow the named owner and escalation path.</li><li>Record decisions in the related task so the work stays traceable.</li></ul><div className="document-callout"><strong>Gwira guidance</strong><p>Doats can use this document only when they have the access shown above. Verified knowledge is preferred when planning work.</p></div><h2>Related knowledge</h2><div className="document-related"><button type="button">▤ Related SOP <small>Approved process</small></button><button type="button">✓ Linked task <small>Review this quarter</small></button><button type="button">◉ Related Doat <small>Operations assistant</small></button></div></div></article>;
+function LibraryDialog({label,onClose,children}:{label:string;onClose:()=>void;children:React.ReactNode}):React.ReactElement {
+  const ref=useRef<HTMLDialogElement>(null);useEffect(()=>{ref.current?.showModal();return()=>ref.current?.close();},[]);
+  return <dialog ref={ref} className="gw-library-dialog" aria-label={label} onKeyDown={event=>{if(event.key==='Escape'){event.preventDefault();event.stopPropagation();onClose();}}} onCancel={event=>{event.preventDefault();onClose();}}>{children}</dialog>;
+}
+function LibraryEditor({editor,records,folderId,onClose,onSave,onSaved}:{editor:Editor;records:LibraryDocument[];folderId?:string;onClose:()=>void;onSave:(next:LibraryDocument[],message:string)=>boolean;onSaved:()=>void}):React.ReactElement {
+  const item='item'in editor?editor.item:undefined;
+  const [title,setTitle]=useState(item?.title??''),[content,setContent]=useState(item?.content??''),[parent,setParent]=useState(item?.parentId??''),[error,setError]=useState('');
+  const heading=editor.kind==='delete'?'Remove from Library?':editor.kind==='move'?'Move to folder':editor.kind==='rename'?'Rename item':editor.kind==='edit'?'Edit document':'type'in editor&&editor.type==='Folder'?'New folder':'New document';
+  return <LibraryDialog label={heading} onClose={onClose}><form onSubmit={event=>{event.preventDefault();setError('');if(editor.kind!=='delete'&&editor.kind!=='move'&&!title.trim()){setError('Enter a name.');return;}const now=new Date().toISOString();let next:LibraryDocument[];if(editor.kind==='delete')next=removeLibraryRecord(records,editor.item.id);else if(editor.kind==='move')next=records.map(record=>record.id===editor.item.id?{...record,parentId:parent||undefined,updatedAt:now}:record);else if(item)next=records.map(record=>record.id===item.id?{...record,title:title.trim(),...(editor.kind==='edit'?{content}:{}),updatedAt:now}:record);else next=[{id:crypto.randomUUID(),title:title.trim(),type:editor.kind==='create'?editor.type:'Doc',collection:'Unsorted',owner:'',updated:now,updatedAt:now,createdAt:now,access:'Private',doatAccess:'',description:'',parentId:folderId,...(editor.kind==='create'&&editor.type==='Doc'?{content}:{})},...records];if(onSave(next,editor.kind==='delete'?'Removed from Library. Original files were not deleted.':'Library changes saved.'))onSaved();else setError('Changes could not be saved. Check device storage and retry.');}}>
+    <header><h2>{heading}</h2><button type="button" aria-label="Close library editor" onClick={onClose}><Icon name="close"/></button></header>
+    {editor.kind==='delete'?<p>Remove “{item?.title}” from this Library? Original files stay on disk. Items inside a removed folder remain in Library.</p>:editor.kind==='move'?<label>Folder<select autoFocus value={parent} onChange={event=>setParent(event.target.value)}><option value="">No folder</option>{libraryFolderChoices(records,editor.item.id).map(folder=><option key={folder.id} value={folder.id}>{folder.title}</option>)}</select></label>:<><label>Name<input autoFocus required maxLength={240} value={title} onChange={event=>setTitle(event.target.value)}/></label>{(editor.kind==='create'&&editor.type==='Doc'||editor.kind==='edit')?<label>Content<textarea maxLength={100000} value={content} onChange={event=>setContent(event.target.value)} placeholder="Write your document…"/></label>:null}</>}
+    {error?<p role="alert">{error}</p>:null}<footer><button type="button" onClick={onClose}>Cancel</button><button type="submit" className={editor.kind==='delete'?'is-danger':'is-primary'}>{editor.kind==='delete'?'Remove item':editor.kind==='move'?'Move item':'Save'}</button></footer>
+  </form></LibraryDialog>;
 }
